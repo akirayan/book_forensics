@@ -7,8 +7,9 @@ a.out
 *.dSYM/
 
 # Compiled decoders (named binaries, no extension)
-evtx_decode/evtx_decode
-regf_decode/regf_decode
+src/evtx_decode/evtx_decode
+src/regf_decode/regf_decode
+src/fat_decode/fat_decode
 
 # Generated from README.md (md2tex output)
 *.tex
