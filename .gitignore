@@ -1,0 +1,26 @@
+# Build artifacts
+*.o
+*.a
+*.so
+*.dylib
+a.out
+*.dSYM/
+
+# Compiled decoders (named binaries, no extension)
+evtx_decode/evtx_decode
+regf_decode/regf_decode
+
+# Generated from README.md (md2tex output)
+*.tex
+
+# Never commit raw/disk images (distribute only compressed samples, e.g. *.img.gz)
+*.img
+*.raw
+*.dd
+*.E01
+*.E0[2-9]
+*.mem
+*.vmem
+
+# macOS
+.DS_Store
