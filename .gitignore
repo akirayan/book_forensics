@@ -25,3 +25,4 @@ src/fat_decode/fat_decode
 
 # macOS
 .DS_Store
+src/md_super
