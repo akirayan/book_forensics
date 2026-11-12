@@ -96,7 +96,10 @@ int main(int argc, char *argv[]) {
     if (!f) { perror(argv[1]); return 1; }
 
     MBR mbr;
-    fread(&mbr, sizeof mbr, 1, f);
+    if (fread(&mbr, sizeof mbr, 1, f) != 1) {
+        fprintf(stderr, "read error (file smaller than 512 bytes?)\n");
+        fclose(f); return 1;
+    }
 
     if (mbr.signature != 0xAA55) {
         fprintf(stderr, "MBR signature not found\n");
