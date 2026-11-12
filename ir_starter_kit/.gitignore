@@ -1,0 +1,17 @@
+# --- 証拠データは入れない ---
+# CASES のケース中身は無視し、骨格(.gitkeep)だけ残す
+CASES/*
+!CASES/.gitkeep
+
+# --- 同梱バイナリ（別途入手。README の「ツールの入手」を参照）---
+ewftools-x64/
+avml/
+dumpit/
+DumpIt/
+MemProcFS/
+dwarf2json/
+btf2json/
+
+# --- OS 雑多 ---
+.DS_Store
+Thumbs.db
