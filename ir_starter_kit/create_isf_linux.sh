@@ -58,8 +58,8 @@ fi
 # OS を自動判別して dwarf2json を選ぶ
 OSNAME=$(uname -s)
 case "$OSNAME" in
-  Darwin) DW="$SCRIPT_DIR/dwarf2json/dwarf2json-darwin-amd64" ;;
-  Linux)  DW="$SCRIPT_DIR/dwarf2json/dwarf2json-linux-amd64" ;;
+  Darwin) DW="$SCRIPT_DIR/tools/dwarf2json/dwarf2json-darwin-amd64" ;;
+  Linux)  DW="$SCRIPT_DIR/tools/dwarf2json/dwarf2json-linux-amd64" ;;
   *)      err "未対応の OS: $OSNAME（macOS / Linux のみ）"; exit 1 ;;
 esac
 if [ ! -x "$DW" ]; then

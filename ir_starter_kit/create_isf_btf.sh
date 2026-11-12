@@ -79,7 +79,7 @@ OSN=$(uname -s); ARCHM=$(uname -m)
 case "$OSN" in Darwin) OSK=darwin;; Linux) OSK=linux;; *) OSK="";; esac
 case "$ARCHM" in x86_64|amd64) ARCHK=amd64;; aarch64|arm64) ARCHK=arm64;; *) ARCHK="";; esac
 BTF2JSON=""
-for c in "$SCRIPT_DIR/btf2json/btf2json-$OSK-$ARCHK" "$SCRIPT_DIR/btf2json/btf2json"; do
+for c in "$SCRIPT_DIR/tools/btf2json/btf2json-$OSK-$ARCHK" "$SCRIPT_DIR/tools/btf2json/btf2json"; do
   if [ -x "$c" ]; then BTF2JSON="$c"; break; fi
 done
 if [ -z "$BTF2JSON" ] && command -v btf2json >/dev/null 2>&1; then BTF2JSON="btf2json"; fi

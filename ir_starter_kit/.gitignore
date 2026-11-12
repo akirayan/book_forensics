@@ -3,14 +3,11 @@
 CASES/*
 !CASES/.gitkeep
 
-# --- 同梱バイナリ（別途入手。README の「ツールの入手」を参照）---
-ewftools-x64/
-avml/
-dumpit/
-DumpIt/
-MemProcFS/
-dwarf2json/
-btf2json/
+# --- 同梱バイナリは tools/ 配下に置くが git には含めない（README「ツールの入手」参照）---
+# フォルダ構成（各 tools/<ツール>/.gitkeep）だけ残し、バイナリ本体は無視する
+tools/**
+!tools/**/
+!tools/**/.gitkeep
 
 # --- OS 雑多 ---
 .DS_Store

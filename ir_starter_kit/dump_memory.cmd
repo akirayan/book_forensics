@@ -65,11 +65,11 @@ echo Architecture: %OSARCH%
 echo Architecture: %OSARCH% >> "%LOGFILE%"
 
 if /I "%OSARCH%"=="Arm64" (
-    set "DUMPIT=%KIT_ROOT%\dumpit\ARM64\DumpIt.exe"
+    set "DUMPIT=%KIT_ROOT%\tools\dumpit\ARM64\DumpIt.exe"
 ) else if /I "%OSARCH%"=="X64" (
-    set "DUMPIT=%KIT_ROOT%\dumpit\x64\DumpIt.exe"
+    set "DUMPIT=%KIT_ROOT%\tools\dumpit\x64\DumpIt.exe"
 ) else (
-    set "DUMPIT=%KIT_ROOT%\dumpit\x86\DumpIt.exe"
+    set "DUMPIT=%KIT_ROOT%\tools\dumpit\x86\DumpIt.exe"
 )
 
 echo DumpIt: %DUMPIT%

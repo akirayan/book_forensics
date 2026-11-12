@@ -29,12 +29,15 @@ ir_starter_kit/
 ├── create_case_dirs.cmd       create_case_dirs.sh   … ケースの骨格作成
 ├── ewf_imager.cmd             ewf_imager.sh         … ディスク保全(E01)＋verify＋info
 ├── dump_memory.cmd            dump_memory.sh        … メモリ取得
+├── create_isf_linux.sh / create_isf_btf.sh         … Volatility3 用 ISF 生成
 │
-└── (同梱バイナリ ※gitには入れない)
+└── tools/                     … 同梱バイナリ（フォルダ名だけ版管理、本体は入れない）
     ├── ewftools-x64/          … Windows 版 ewfacquire/ewfverify/ewfinfo
-    ├── DumpIt/                … Windows メモリ取得
+    ├── dumpit/                … Windows メモリ取得（DumpIt、ARM64/x64/x86）
+    ├── avml/                  … Linux メモリ取得
     ├── MemProcFS/             … メモリ解析（任意）
-    └── avml/                  … Linux メモリ取得
+    ├── dwarf2json/            … Volatility3 ISF 生成（DWARF）
+    └── btf2json/              … Volatility3 ISF 生成（BTF）
 ```
 
 ケースの中身はこうなる（`create_case_dirs` が作る）。
@@ -119,17 +122,18 @@ ewf_imager.cmd  C26010 "Live Windows11 Arm64, disk0" endoaki 0
 ## ツールの入手（同梱バイナリ）
 
 同梱バイナリは容量が大きく、各々ライセンスが異なるので **このリポジトリには含めない**
-（`.gitignore` 済み）。実機キットには、各ツールを公式配布元から入手して、キット直下の
-下表のフォルダ名で配置する。ライセンスはそれぞれの配布元に従うこと。
+（`.gitignore` 済み。版管理するのは `tools/<ツール>/` のフォルダ名だけ）。実機キットには、
+各ツールを公式配布元から入手して、下表の **`tools/` 配下**のフォルダに配置する。
+ライセンスはそれぞれの配布元に従うこと。
 
-| フォルダ | ツール / 用途 | 入手先 |
+| 置き場所 | ツール / 用途 | 入手先 |
 |---|---|---|
-| `ewftools-x64/` | ewftools（libewf）― ディスク保全 E01（Windows ビルド） | libyal/libewf のリリース（`github.com/libyal/libewf`）。Linux は `apt install ewf-tools` でよい |
-| `avml/` | AVML ― Linux メモリ取得 | `github.com/microsoft/avml` のリリース（MIT） |
-| `DumpIt/` | DumpIt ― Windows メモリ取得 | Magnet Forensics（旧 Comae）の配布ページ |
-| `MemProcFS/` | MemProcFS ― メモリ解析 | `github.com/ufrisk/MemProcFS` のリリース |
-| `dwarf2json/` | Volatility3 用 ISF（シンボル）生成 | `github.com/volatilityfoundation/dwarf2json` |
-| `btf2json/` | BTF から ISF 生成 | Volatility3 エコシステム（`create_isf_btf.sh` 参照） |
+| `tools/ewftools-x64/` | ewftools（libewf）― ディスク保全 E01（Windows ビルド） | libyal/libewf のリリース（`github.com/libyal/libewf`）。Linux は `apt install ewf-tools` でよい |
+| `tools/avml/` | AVML ― Linux メモリ取得 | `github.com/microsoft/avml` のリリース（MIT） |
+| `tools/dumpit/` | DumpIt ― Windows メモリ取得（`ARM64/` `x64/` `x86/`） | Magnet Forensics（旧 Comae）の配布ページ |
+| `tools/MemProcFS/` | MemProcFS ― メモリ解析 | `github.com/ufrisk/MemProcFS` のリリース |
+| `tools/dwarf2json/` | Volatility3 用 ISF（シンボル）生成 | `github.com/volatilityfoundation/dwarf2json` |
+| `tools/btf2json/` | BTF から ISF 生成 | Volatility3 エコシステム（`create_isf_btf.sh` 参照） |
 
 ---
 

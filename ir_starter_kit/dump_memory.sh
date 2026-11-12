@@ -66,8 +66,8 @@ fi
 
 # arch で AVML を選ぶ（x86_64 / aarch64 のみ）
 case "$ARCH" in
-  x86_64|amd64)  AVML="$SCRIPT_DIR/avml/avml" ;;
-  aarch64|arm64) AVML="$SCRIPT_DIR/avml/avml-aarch64" ;;
+  x86_64|amd64)  AVML="$SCRIPT_DIR/tools/avml/avml" ;;
+  aarch64|arm64) AVML="$SCRIPT_DIR/tools/avml/avml-aarch64" ;;
   *)             AVML="" ;;
 esac
 if [ -z "$AVML" ]; then

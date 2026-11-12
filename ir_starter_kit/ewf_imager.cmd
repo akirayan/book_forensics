@@ -34,9 +34,9 @@ set "CASE_ROOT=%KIT_ROOT%CASES\%CASE_NO%"
 set "ACQ_DIR=%CASE_ROOT%\acquisition"
 set "LOG_DIR=%CASE_ROOT%\logs"
 
-set "EWFACQUIRE=%KIT_ROOT%ewftools-x64\ewfacquire.exe"
-set "EWFVERIFY=%KIT_ROOT%ewftools-x64\ewfverify.exe"
-set "EWFINFO=%KIT_ROOT%ewftools-x64\ewfinfo.exe"
+set "EWFACQUIRE=%KIT_ROOT%tools\ewftools-x64\ewfacquire.exe"
+set "EWFVERIFY=%KIT_ROOT%tools\ewftools-x64\ewfverify.exe"
+set "EWFINFO=%KIT_ROOT%tools\ewftools-x64\ewfinfo.exe"
 
 if not exist "%ACQ_DIR%" (
     echo ERROR: Case directory not found.
@@ -120,8 +120,9 @@ echo Examiner   : %EXAMINER%
 echo ===========================================================
 echo.
 
-REM ewfacquire: -d sha1(二次ダイジェスト), -C/-D/-e(ケース/説明/取得者), -S 4G(分割), -g 64(エラー時スキップ)
-REM （以前は -d に説明文を渡していたが誤り。ewf_imager.sh と同じ正しい使い方に統一）
+REM ewfacquire: -d sha1 (secondary digest), -C/-D/-e (case/description/examiner),
+REM             -S 4G (segment split), -g 64 (skip on read error).
+REM             Same flags as ewf_imager.sh (earlier the description was wrongly passed to -d).
 powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%EWFACQUIRE%' -u -t '%ACQ_DIR%\%IMAGE_BASE%' -c fast -f encase6 -S 4G -d sha1 -g 64 -C '%CASE_NO%' -D '%DESCRIPTION%' -e '%EXAMINER%' '%SOURCE%' 2>&1 | Tee-Object -FilePath '%ACQ_LOG%' -Append"
 
 set "RC=%ERRORLEVEL%"
@@ -209,6 +210,32 @@ echo.
 echo.>> "%INFO_LOG%"
 echo Finish Time : %DATE% %TIME%>> "%INFO_LOG%"
 
+REM ------------------------------------------------------------
+REM FTK Imager style summary: <image>.E01.txt next to the E01 (same as ewf_imager.sh)
+REM ------------------------------------------------------------
+set "E01_TXT=%ACQ_DIR%\%IMAGE_BASE%.E01.txt"
+(
+echo Created By ewf_imager.cmd ^(libewf / ewftools^)
+echo.
+echo Case Information:
+echo   Case Number:         %CASE_NO%
+echo   Unique Description:  %DESCRIPTION%
+echo   Examiner:            %EXAMINER%
+echo.
+echo --------------------------------------------------------------
+echo Information for %E01_FILE%:
+echo.
+echo   Source:              %SOURCE%
+echo   Image Type:          EnCase6 ^(E01^), compression=fast, segment=4GiB
+echo   Times:               see logs\ acquisition/verify logs
+echo.
+echo --------------------------------------------------------------
+echo Image Verification Results:
+findstr /c:"hash stored" /c:"hash calculated" /c:"ewfverify:" "%VERIFY_LOG%"
+) > "%E01_TXT%"
+
+echo.
+echo Summary : %E01_TXT%
 
 exit /b %VERIFY_RC%
 
