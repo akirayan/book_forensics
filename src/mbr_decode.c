@@ -104,9 +104,11 @@ int main(int argc, char *argv[]) {
     }
 
     printf("Disk: %s\n", argv[1]);
+    /* disk_sig は LE 格納。ディスク署名の「値」は逆順で表示する
+       （fdisk の 0xXXXXXXXX 表記に一致させる） */
     printf("Disk Signature: %02x%02x%02x%02x\n",
-           mbr.disk_sig[0], mbr.disk_sig[1],
-           mbr.disk_sig[2], mbr.disk_sig[3]);
+           mbr.disk_sig[3], mbr.disk_sig[2],
+           mbr.disk_sig[1], mbr.disk_sig[0]);
     printf("\n");
     printf("%-4s %-6s %-5s %-12s %-12s %-9s %s\n",
            "#", "Boot", "SysID", "LBA_Start", "Sectors", "Size_MB", "Type");
