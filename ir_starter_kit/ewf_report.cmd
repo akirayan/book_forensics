@@ -2,14 +2,19 @@
 setlocal
 
 REM ============================================================
-REM generate_report.cmd
+REM ewf_report.cmd
+REM   Build a Markdown acquisition report from the logs under
+REM   CASES\<CASE_NO>\  (counterpart of ewf_report.sh).
 REM
 REM Usage:
-REM   generate_report.cmd CASE_NO TARGET
+REM   ewf_report.cmd CASE_NO TARGET
+REM     TARGET: the log prefix used at acquisition time (disk0 / driveC ...)
 REM
 REM Examples:
-REM   generate_report.cmd C26011 disk0
-REM   generate_report.cmd C26012 driveC
+REM   ewf_report.cmd C26011 disk0
+REM   ewf_report.cmd C26012 driveC
+REM
+REM CASES is read from the CURRENT directory; cd to your save media first.
 REM ============================================================
 
 if "%~2"=="" (
@@ -26,7 +31,7 @@ set "CASE_NO=%~1"
 set "TARGET=%~2"
 
 set "KIT_ROOT=%~dp0"
-set "CASE_ROOT=%KIT_ROOT%CASES\%CASE_NO%"
+set "CASE_ROOT=%CD%\CASES\%CASE_NO%"
 
 set "LOG_DIR=%CASE_ROOT%\logs"
 set "REPORT_DIR=%CASE_ROOT%\reports"

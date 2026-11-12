@@ -11,9 +11,10 @@ if "%~1"=="" (
 set CASE_NO=%~1
 set KIT_ROOT=%~dp0
 
+REM CASES is under the CURRENT directory; create_case_dirs.cmd (sibling) inherits this cwd.
 call "%KIT_ROOT%create_case_dirs.cmd" %CASE_NO% >nul
 
-set LOG=%KIT_ROOT%CASES\%CASE_NO%\logs\system-info.log
+set LOG=%CD%\CASES\%CASE_NO%\logs\system-info.log
 
 echo Writing: %LOG%
 

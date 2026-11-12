@@ -9,21 +9,34 @@ if "%~1"=="" (
 set CASE_NO=%~1
 set KIT_ROOT=%~dp0
 
-set CASE_ROOT=%KIT_ROOT%CASES\%CASE_NO%
+REM CASES is created under the CURRENT directory (same model as the Linux .sh).
+REM cd to your save media (e.g. the USB SSD) before running this from there.
+if /I "%CD%"=="%SystemRoot%\System32" (
+    echo ERROR: You are in the system folder. CASES would be created here.
+    echo Change to your save media first, then run from there.
+    echo   example:  E:
+    echo             cd \
+    exit /b 1
+)
+
+set CASE_ROOT=%CD%\CASES\%CASE_NO%
 set LOG_DIR=%CASE_ROOT%\logs
 set ACQ_DIR=%CASE_ROOT%\acquisition
+set MEM_DIR=%CASE_ROOT%\memory
 set REPORT_DIR=%CASE_ROOT%\reports
 
-if not exist "%KIT_ROOT%CASES" mkdir "%KIT_ROOT%CASES"
+if not exist "%CD%\CASES" mkdir "%CD%\CASES"
 
 if not exist "%CASE_ROOT%" mkdir "%CASE_ROOT%"
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 if not exist "%ACQ_DIR%" mkdir "%ACQ_DIR%"
+if not exist "%MEM_DIR%" mkdir "%MEM_DIR%"
 if not exist "%REPORT_DIR%" mkdir "%REPORT_DIR%"
 
 echo CASE_ROOT=%CASE_ROOT%
 echo LOG_DIR=%LOG_DIR%
 echo ACQ_DIR=%ACQ_DIR%
+echo MEM_DIR=%MEM_DIR%
 echo REPORT_DIR=%REPORT_DIR%
 
 exit /b 0

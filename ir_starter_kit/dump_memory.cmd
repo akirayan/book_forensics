@@ -32,7 +32,8 @@ REM Remove trailing backslash from script path
 set "KIT_ROOT=%~dp0"
 if "%KIT_ROOT:~-1%"=="\" set "KIT_ROOT=%KIT_ROOT:~0,-1%"
 
-set "CASE_DIR=%KIT_ROOT%\CASES\%CASE_NO%"
+REM CASES under the CURRENT directory (cd to your save media first). DumpIt stays with the kit (KIT_ROOT).
+set "CASE_DIR=%CD%\CASES\%CASE_NO%"
 set "MEM_DIR=%CASE_DIR%\memory"
 set "LOG_DIR=%CASE_DIR%\logs"
 

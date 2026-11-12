@@ -24,7 +24,8 @@ if "%~1"=="" (
 
 set "CASE_NO=%~1"
 set "KIT_ROOT=%~dp0"
-set "CASE_ROOT=%KIT_ROOT%CASES\%CASE_NO%"
+REM CASES is under the CURRENT directory (cd to your save media first; same as create_case_dirs.cmd)
+set "CASE_ROOT=%CD%\CASES\%CASE_NO%"
 set "LOG_DIR=%CASE_ROOT%\logs"
 set "LOGFILE=%LOG_DIR%\disk-info.log"
 

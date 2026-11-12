@@ -27,8 +27,9 @@ ir_starter_kit/
 ├── list_disk.cmd              list_disk.sh          … 保全対象の確認
 ├── get_system_info.cmd        get_system_info.sh    … システム情報の記録
 ├── create_case_dirs.cmd       create_case_dirs.sh   … ケースの骨格作成
-├── ewf_imager.cmd             ewf_imager.sh         … ディスク保全(E01)＋verify＋info
+├── ewf_imager.cmd             ewf_imager.sh         … ディスク保全(E01)＋verify＋info＋E01.txt
 ├── dump_memory.cmd            dump_memory.sh        … メモリ取得
+├── ewf_report.cmd             ewf_report.sh         … ログから Markdown レポート生成
 ├── create_isf_linux.sh / create_isf_btf.sh         … Volatility3 用 ISF 生成
 │
 └── tools/                     … 同梱バイナリ（フォルダ名だけ版管理、本体は入れない）
@@ -62,12 +63,18 @@ CASES/<CASE_NO>/
 4. **ディスク保全** — `ewf_imager <CASE_NO> "<説明>" <取得者> <対象>` で E01 取得。
    取得後に verify と ewfinfo が自動で走る。
 5. **メモリ保全（必要時）** — `dump_memory`。
-6. **持ち帰り・移送** — `CASES/<CASE_NO>/` 一式を解析環境の fileserver へ移す。
-   E01 のハッシュ（取得ログ / ewfinfo）で、移送後も完全性を確認できる。
+6. **レポート（任意）** — `ewf_report <CASE_NO> <TARGET>` で、ログから Markdown の保全
+   レポートを `CASES/<CASE_NO>/reports/` に生成する（TARGET は取得時のログ接頭辞）。
+7. **持ち帰り・移送** — `CASES/<CASE_NO>/` 一式を解析環境の fileserver へ移す。
+   E01 のハッシュ（取得ログ / ewfinfo / E01.txt）で、移送後も完全性を確認できる。
 
 > [!NOTE]
-> USB-SSD への直接 imaging が遅い場合は、`create_case_dirs <CASE_NO> <速いローカル>`
-> で一旦ローカルに保全し、後で `CASES/` または fileserver へ移してもよい。
+> **`CASES/` は「いまいるフォルダ（カレント）」の下に作られる**（Windows の `.cmd` も Linux の
+> `.sh` も同じ）。だから、証拠を落としたい媒体（保存用 SSD など）へ `cd` してから、キットを
+> 呼ぶ。こうすると保全データ（`CASES/`）だけが保存先に集まり、**キット本体はどこに置いても
+> よい**――キットと保存先を分けられる。Live Windows のように「キットも保存先も同じ SSD」なら、
+> その SSD（またはキットのフォルダ）へ `cd` してから実行すればよい。Windows の `.cmd` は、
+> 既定の `System32` で誤って `CASES` を作らないようガードを入れてある。
 
 ---
 
@@ -75,11 +82,23 @@ CASES/<CASE_NO>/
 
 ### Windows（管理者 CMD）
 
+まず証拠を置く場所へ `cd` する。「キットも保存先も同じ SSD」ならキットのフォルダへ、
+「保存先を別にする」なら保存先ドライブへ移動し、キットはフルパスで呼ぶ。
+
 ```cmd
+rem 例) キット兼保存用 SSD(E:) の中で作業する場合
+cd /d E:\ir_starter_kit
 list_disk.cmd            CASE_NO
-get_system_info.cmd      CASE_NO
 create_case_dirs.cmd     CASE_NO
-ewf_imager.cmd  C26010 "Live Windows11 Arm64, disk0" endoaki 0
+get_system_info.cmd      CASE_NO
+ewf_imager.cmd   C26010 "Live Windows11 Arm64, disk0" endoaki 0
+ewf_report.cmd   C26010 disk0
+
+rem 例) 保存先を別ドライブ(D:)にする場合はそこへ cd し、キットはフルパスで
+D:
+cd \
+E:\ir_starter_kit\create_case_dirs.cmd  C26010
+E:\ir_starter_kit\ewf_imager.cmd  C26010 "..." endoaki 0
 ```
 
 `ewf_imager.cmd` の TARGET:
@@ -89,11 +108,15 @@ ewf_imager.cmd  C26010 "Live Windows11 Arm64, disk0" endoaki 0
 
 ### Linux（root / sudo）
 
+同じく、証拠を置く媒体へ `cd` してから、キットをフルパスで呼ぶ。
+
 ```bash
-./list_disk.sh           # 一覧だけ見る（CASE_NO 省略可）
-./create_case_dirs.sh    C26010
-./get_system_info.sh     C26010
-./ewf_imager.sh  C26010 "Dell Latitude 5540, disk0" endoaki sdb
+$ cd /mnt/ssd                               # 保存先の媒体へ移動
+$ /mnt/fileserver/scripts/list_disk.sh      # 一覧だけ見る（CASE_NO 省略可）
+$ /mnt/fileserver/scripts/create_case_dirs.sh  C26010
+$ /mnt/fileserver/scripts/get_system_info.sh   C26010
+$ /mnt/fileserver/scripts/ewf_imager.sh  C26010 "Dell Latitude 5540, disk0" endoaki sdb
+$ /mnt/fileserver/scripts/ewf_report.sh  C26010 sdb
 ```
 
 `ewf_imager.sh` の TARGET はブロックデバイス名（`sdb`, `nvme0n1`）か絶対パス（`/dev/sdb`）。

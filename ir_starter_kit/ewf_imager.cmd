@@ -30,7 +30,15 @@ set "TARGET=%~4"
 
 set "KIT_ROOT=%~dp0"
 
-set "CASE_ROOT=%KIT_ROOT%CASES\%CASE_NO%"
+REM CASES is created under the CURRENT directory (same model as ewf_imager.sh).
+REM cd to your save media first; the tools below stay with the kit (%~dp0).
+if /I "%CD%"=="%SystemRoot%\System32" (
+    echo ERROR: You are in the system folder. CASES would be created here.
+    echo Change to your save media first. Example:  E:   then   cd \
+    exit /b 1
+)
+
+set "CASE_ROOT=%CD%\CASES\%CASE_NO%"
 set "ACQ_DIR=%CASE_ROOT%\acquisition"
 set "LOG_DIR=%CASE_ROOT%\logs"
 
