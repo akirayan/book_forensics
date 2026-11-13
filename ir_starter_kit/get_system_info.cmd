@@ -3,18 +3,20 @@ setlocal
 
 chcp 65001 >nul
 
-if "%~1"=="" (
-    echo Usage: get_system_info.cmd CASE_NO
+if "%~2"=="" (
+    echo Usage: get_system_info.cmd CASE_NO EVIDENCE_ID
+    echo   EVIDENCE_ID: evidence id for a PC/server/HDD, e.g. E001
     exit /b 1
 )
 
 set CASE_NO=%~1
+set EVIDENCE_ID=%~2
 set KIT_ROOT=%~dp0
 
 REM CASES is under the CURRENT directory; create_case_dirs.cmd (sibling) inherits this cwd.
-call "%KIT_ROOT%create_case_dirs.cmd" %CASE_NO% >nul
+call "%KIT_ROOT%create_case_dirs.cmd" %CASE_NO% %EVIDENCE_ID% >nul
 
-set LOG=%CD%\CASES\%CASE_NO%\logs\system-info.log
+set LOG=%CD%\CASES\%CASE_NO%\%EVIDENCE_ID%\logs\system-info.log
 
 echo Writing: %LOG%
 
@@ -23,6 +25,7 @@ echo =====================================
 echo System Information
 echo =====================================
 echo Case=%CASE_NO%
+echo Evidence=%EVIDENCE_ID%
 echo Date=%DATE% %TIME%
 echo.
 

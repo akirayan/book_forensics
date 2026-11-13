@@ -1,15 +1,17 @@
 #!/bin/bash
 # list_disk.sh — 保全対象を選ぶためのディスク/パーティション一覧（list_disk.cmd の Linux 版）
 #
-# 使い方:  ./list_disk.sh [CASE_NO]
-#   CASE_NO を渡すと CASES/<CASE_NO>/logs/disk-info.log にも保存する。
+# 使い方:  ./list_disk.sh [CASE_NO EVIDENCE_ID]
+#   引数なし          … 一覧を画面に出すだけ
+#   CASE_NO EVIDENCE_ID … CASES/<CASE_NO>/<EVIDENCE_ID>/logs/disk-info.log にも保存する
 #
 # 判断はしない。どのデバイスを保全するかは調査担当者が決める。
 # 保全先（この SSD）を誤って取得しないよう、SIZE / MODEL / SERIAL / TRAN(接続) /
 # RM(取り外し可) をよく見て取り違えないこと。
 
 set -u
-CASE_NO="${1:-}"   # CASE_NO を渡すと カレントの CASES/<CASE_NO>/logs/ にも保存する
+CASE_NO="${1:-}"
+EVID="${2:-}"
 
 run() {
   echo "===================================="
@@ -32,10 +34,14 @@ run() {
   sudo lvs 2>/dev/null
 }
 
-if [ -n "$CASE_NO" ]; then
-  LOG="$PWD/CASES/$CASE_NO/logs/disk-info.log"
+if [ -n "$CASE_NO" ] || [ -n "$EVID" ]; then
+  if [ -z "$CASE_NO" ] || [ -z "$EVID" ]; then
+    echo "ERROR: 保存するなら CASE_NO と EVIDENCE_ID の両方を渡す。例: $0 C26015 E001"
+    exit 1
+  fi
+  LOG="$PWD/CASES/$CASE_NO/$EVID/logs/disk-info.log"
   if [ ! -d "$(dirname "$LOG")" ]; then
-    echo "ERROR: 先に  ./create_case_dirs.sh $CASE_NO  を実行する。"
+    echo "ERROR: 先に  ./create_case_dirs.sh $CASE_NO $EVID  を実行する。"
     exit 1
   fi
   run | tee "$LOG"

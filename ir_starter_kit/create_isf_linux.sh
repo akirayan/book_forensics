@@ -8,16 +8,17 @@
 # ※ dwarf2json は「対象と同じ arch」で動かす必要はない（確保した vmlinux を
 #    解析するだけ）。だから ARM64 で取得した材料も、mac/x64 でここで ISF にできる。
 #
-# 使い方:  ./create_isf_linux.sh <CASE_ID>
-#   例:    cd /path/to/evidence && /path/to/kit/create_isf_linux.sh C26015
-#   前提:  カレントに <CASE_ID>/symbols/ があり、dump_memory_linux.sh の材料が入っている
-#          （kernel.release, vmlinux-<rel>, System.map-<rel> など）。
-#   出力:  <CASE_ID>/symbols/<rel>.json  … これを Volatility の symbols/linux/ へ置く。
+# 使い方:  ./create_isf_linux.sh <CASE_NO> <EVIDENCE_ID>
+#   例:    cd /path/to/evidence && /path/to/kit/create_isf_linux.sh C26015 E001
+#   前提:  カレントに CASES/<CASE_NO>/<EVIDENCE_ID>/symbols/ があり、dump_memory.sh の
+#          材料が入っている（kernel.release, vmlinux-<rel>, System.map-<rel> など）。
+#   出力:  CASES/<CASE_NO>/<EVIDENCE_ID>/symbols/<rel>.json  … Volatility の symbols/linux/ へ置く。
 
 set -u
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 CASE="${1:-}"
+EVID="${2:-}"
 
 say(){  printf '\033[1;34m[*]\033[0m %s\n' "$*" >&2; }
 warn(){ printf '\033[1;33m[!]\033[0m %s\n' "$*" >&2; }
@@ -29,11 +30,11 @@ sha256_of(){
   else echo "NO_SHA_TOOL"; fi
 }
 
-[ -n "$CASE" ] || { err "usage: $0 <CASE_ID>   例: $0 C26015"; exit 1; }
+if [ -z "$CASE" ] || [ -z "$EVID" ]; then err "usage: $0 <CASE_NO> <EVIDENCE_ID>   例: $0 C26015 E001"; exit 1; fi
 
-SYM_DIR="./$CASE/symbols"
-LOG_DIR="./$CASE/logs"
-[ -d "$SYM_DIR" ] || { err "材料フォルダが無い: $SYM_DIR（カレントに $CASE/ があるか確認）"; exit 1; }
+SYM_DIR="./CASES/$CASE/$EVID/symbols"
+LOG_DIR="./CASES/$CASE/$EVID/logs"
+[ -d "$SYM_DIR" ] || { err "材料フォルダが無い: $SYM_DIR（カレントに CASES/$CASE/$EVID/ があるか確認）"; exit 1; }
 mkdir -p "$LOG_DIR" 2>/dev/null || true
 
 # 対象カーネルの release を材料から読む
@@ -69,7 +70,7 @@ if [ ! -x "$DW" ]; then
   exit 1
 fi
 
-say "case   : $CASE"
+say "case   : $CASE  evidence: $EVID"
 say "kernel : $KREL"
 say "host OS: $OSNAME  ->  $(basename "$DW")"
 say "vmlinux: $VMLINUX"
@@ -95,8 +96,8 @@ if [ -s "$ISF" ]; then
   say "  SHA-256: $(sha256_of "$ISF")"
   say "次の手順:"
   say "  1) ISF を Volatility の symbols/linux/ に置く（または VOLATILITY_SYMBOL_DIRS に追加）"
-  say "  2) vol -f <CASE>/memory/*.lime banners.Banners  で版が一致するか確認"
-  say "  3) mem_triage.sh <CASE>/memory/*.lime linux  で一括トリアージ"
+  say "  2) vol -f CASES/$CASE/$EVID/memory/*.lime banners.Banners  で版が一致するか確認"
+  say "  3) mem_triage.sh CASES/$CASE/$EVID/memory/*.lime linux  で一括トリアージ"
 else
   err "ISF の生成に失敗（$LOG_DIR/dwarf2json.err を確認）。"
   rm -f "$ISF"

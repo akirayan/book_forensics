@@ -7,31 +7,33 @@ REM   Build a Markdown acquisition report from the logs under
 REM   CASES\<CASE_NO>\  (counterpart of ewf_report.sh).
 REM
 REM Usage:
-REM   ewf_report.cmd CASE_NO TARGET
+REM   ewf_report.cmd CASE_NO EVIDENCE_ID TARGET
+REM     EVIDENCE_ID: evidence id for a PC/server/HDD, e.g. E001
 REM     TARGET: the log prefix used at acquisition time (disk0 / driveC ...)
 REM
 REM Examples:
-REM   ewf_report.cmd C26011 disk0
-REM   ewf_report.cmd C26012 driveC
+REM   ewf_report.cmd C26011 E001 disk0
+REM   ewf_report.cmd C26012 E001 driveC
 REM
 REM CASES is read from the CURRENT directory; cd to your save media first.
 REM ============================================================
 
-if "%~2"=="" (
+if "%~3"=="" (
     echo Usage:
-    echo   %~nx0 CASE_NO TARGET
+    echo   %~nx0 CASE_NO EVIDENCE_ID TARGET
     echo.
     echo Examples:
-    echo   %~nx0 C26011 disk0
-    echo   %~nx0 C26012 driveC
+    echo   %~nx0 C26011 E001 disk0
+    echo   %~nx0 C26012 E001 driveC
     exit /b 1
 )
 
 set "CASE_NO=%~1"
-set "TARGET=%~2"
+set "EVIDENCE_ID=%~2"
+set "TARGET=%~3"
 
 set "KIT_ROOT=%~dp0"
-set "CASE_ROOT=%CD%\CASES\%CASE_NO%"
+set "CASE_ROOT=%CD%\CASES\%CASE_NO%\%EVIDENCE_ID%"
 
 set "LOG_DIR=%CASE_ROOT%\logs"
 set "REPORT_DIR=%CASE_ROOT%\reports"
@@ -56,6 +58,7 @@ echo.
 echo ^| Item ^| Value ^|
 echo ^|------^|------^|
 echo ^| Case Number ^| %CASE_NO% ^|
+echo ^| Evidence ID ^| %EVIDENCE_ID% ^|
 echo ^| Target ^| %TARGET% ^|
 echo.
 echo ---

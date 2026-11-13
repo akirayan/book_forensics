@@ -41,30 +41,37 @@ ir_starter_kit/
     └── btf2json/              … Volatility3 ISF 生成（BTF）
 ```
 
-ケースの中身はこうなる（`create_case_dirs` が作る）。
+ケースの中身はこうなる（`create_case_dirs` が作る）。実案件では 1 つの事件番号
+（CASE_NO）に複数の PC・サーバ・HDD が関わるので、**CASE_NO の下に証拠ごとの
+フォルダ（EVIDENCE_ID）**を切り、そこへデータを保存する。
 
 ```text
-CASES/<CASE_NO>/
-├── acquisition/   … ディスクイメージ(E01 等)
-├── memory/        … メモリイメージ(.lime など)
-├── symbols/       … ISF の材料(vmlinux/System.map/BTF)と ISF(JSON)
-├── logs/          … システム情報・ディスク情報・取得/検証ログ
-└── reports/       … 報告書・メモ
+CASES/<CASE_NO>/                      … 事件番号
+└── <EVIDENCE_ID>/                    … 証拠(PC/サーバ/HDD)ごと。例 E001, E002, …
+    ├── acquisition/  … ディスクイメージ  <CASE_NO>_<EVIDENCE_ID>_<dev>.E01
+    ├── memory/       … メモリイメージ(.lime など)
+    ├── symbols/      … ISF の材料(vmlinux/System.map/BTF)と ISF(JSON)
+    ├── logs/         … システム情報・ディスク情報・取得/検証ログ
+    └── reports/      … 報告書・メモ
 ```
+
+例：事件 C26010 に PC 2 台と外付け HDD 1 台 → `CASES/C26010/{E001,E002,E003}/`。
 
 ---
 
 ## 現場ワークフロー
 
+各スクリプトは **第1引数に CASE_NO、第2引数に EVIDENCE_ID** を取る（証拠ごとに実行する）。
+
 1. **対象の確認** — `list_disk`（.cmd/.sh）で、どれが対象ディスクで、どれが保全先
-   （この SSD）かを見分ける。**取り違えないこと。**
-2. **ケース作成** — `create_case_dirs <CASE_NO>` で骨格を作る。
-3. **システム情報** — `get_system_info <CASE_NO>` で、ライブ状態のシステム情報を記録。
-4. **ディスク保全** — `ewf_imager <CASE_NO> "<説明>" <取得者> <対象>` で E01 取得。
+   （この SSD）かを見分ける。**取り違えないこと。**（`.sh` は引数なしで一覧だけも可）
+2. **ケース作成** — `create_case_dirs <CASE_NO> <EVIDENCE_ID>` で骨格を作る。
+3. **システム情報** — `get_system_info <CASE_NO> <EVIDENCE_ID>` でライブ状態を記録。
+4. **ディスク保全** — `ewf_imager <CASE_NO> <EVIDENCE_ID> "<説明>" <取得者> <対象>` で E01 取得。
    取得後に verify と ewfinfo が自動で走る。
-5. **メモリ保全（必要時）** — `dump_memory`。
-6. **レポート（任意）** — `ewf_report <CASE_NO> <TARGET>` で、ログから Markdown の保全
-   レポートを `CASES/<CASE_NO>/reports/` に生成する（TARGET は取得時のログ接頭辞）。
+5. **メモリ保全（必要時）** — `dump_memory <CASE_NO> <EVIDENCE_ID>`。
+6. **レポート（任意）** — `ewf_report <CASE_NO> <EVIDENCE_ID> <TARGET>` で、ログから Markdown の
+   保全レポートを `CASES/<CASE_NO>/<EVIDENCE_ID>/reports/` に生成する（TARGET は取得時のログ接頭辞）。
 7. **持ち帰り・移送** — `CASES/<CASE_NO>/` 一式を解析環境の fileserver へ移す。
    E01 のハッシュ（取得ログ / ewfinfo / E01.txt）で、移送後も完全性を確認できる。
 
@@ -88,17 +95,17 @@ CASES/<CASE_NO>/
 ```cmd
 rem 例) キット兼保存用 SSD(E:) の中で作業する場合
 cd /d E:\ir_starter_kit
-list_disk.cmd            CASE_NO
-create_case_dirs.cmd     CASE_NO
-get_system_info.cmd      CASE_NO
-ewf_imager.cmd   C26010 "Live Windows11 Arm64, disk0" endoaki 0
-ewf_report.cmd   C26010 disk0
+list_disk.cmd            C26010 E001
+create_case_dirs.cmd     C26010 E001
+get_system_info.cmd      C26010 E001
+ewf_imager.cmd   C26010 E001 "Live Windows11 Arm64, disk0" endoaki 0
+ewf_report.cmd   C26010 E001 disk0
 
 rem 例) 保存先を別ドライブ(D:)にする場合はそこへ cd し、キットはフルパスで
 D:
 cd \
-E:\ir_starter_kit\create_case_dirs.cmd  C26010
-E:\ir_starter_kit\ewf_imager.cmd  C26010 "..." endoaki 0
+E:\ir_starter_kit\create_case_dirs.cmd  C26010 E001
+E:\ir_starter_kit\ewf_imager.cmd  C26010 E001 "..." endoaki 0
 ```
 
 `ewf_imager.cmd` の TARGET:
@@ -112,11 +119,11 @@ E:\ir_starter_kit\ewf_imager.cmd  C26010 "..." endoaki 0
 
 ```bash
 $ cd /mnt/ssd                               # 保存先の媒体へ移動
-$ /mnt/fileserver/scripts/list_disk.sh      # 一覧だけ見る（CASE_NO 省略可）
-$ /mnt/fileserver/scripts/create_case_dirs.sh  C26010
-$ /mnt/fileserver/scripts/get_system_info.sh   C26010
-$ /mnt/fileserver/scripts/ewf_imager.sh  C26010 "Dell Latitude 5540, disk0" endoaki sdb
-$ /mnt/fileserver/scripts/ewf_report.sh  C26010 sdb
+$ /mnt/fileserver/scripts/list_disk.sh      # 一覧だけ見る（引数なし可）
+$ /mnt/fileserver/scripts/create_case_dirs.sh  C26010 E001
+$ /mnt/fileserver/scripts/get_system_info.sh   C26010 E001
+$ /mnt/fileserver/scripts/ewf_imager.sh  C26010 E001 "Dell Latitude 5540, disk0" endoaki sdb
+$ /mnt/fileserver/scripts/ewf_report.sh  C26010 E001 sdb
 ```
 
 `ewf_imager.sh` の TARGET はブロックデバイス名（`sdb`, `nvme0n1`）か絶対パス（`/dev/sdb`）。

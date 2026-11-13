@@ -9,9 +9,10 @@ REM Usage:
 REM   dump_memory.cmd CASE_NO
 REM ============================================================
 
-if "%~1"=="" (
+if "%~2"=="" (
     echo Usage:
-    echo   dump_memory.cmd CASE_NO
+    echo   dump_memory.cmd CASE_NO EVIDENCE_ID
+    echo   EVIDENCE_ID: evidence id for a PC/server/HDD, e.g. E001
     exit /b 1
 )
 
@@ -26,6 +27,7 @@ if not "%ERRORLEVEL%"=="0" (
 )
 
 set "CASE_NO=%~1"
+set "EVIDENCE_ID=%~2"
 
 REM Remove trailing backslash from script path
 
@@ -33,7 +35,7 @@ set "KIT_ROOT=%~dp0"
 if "%KIT_ROOT:~-1%"=="\" set "KIT_ROOT=%KIT_ROOT:~0,-1%"
 
 REM CASES under the CURRENT directory (cd to your save media first). DumpIt stays with the kit (KIT_ROOT).
-set "CASE_DIR=%CD%\CASES\%CASE_NO%"
+set "CASE_DIR=%CD%\CASES\%CASE_NO%\%EVIDENCE_ID%"
 set "MEM_DIR=%CASE_DIR%\memory"
 set "LOG_DIR=%CASE_DIR%\logs"
 
@@ -52,6 +54,7 @@ echo ===================================================== > "%LOGFILE%"
 echo Memory Acquisition Log >> "%LOGFILE%"
 echo ===================================================== >> "%LOGFILE%"
 echo Case Number: %CASE_NO% >> "%LOGFILE%"
+echo Evidence ID: %EVIDENCE_ID% >> "%LOGFILE%"
 echo Start Time : %date% %time% >> "%LOGFILE%"
 
 REM ============================================================

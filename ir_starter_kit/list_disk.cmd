@@ -17,21 +17,23 @@ REM ============================================================
 @echo off
 setlocal
 
-if "%~1"=="" (
-    echo Usage: %~nx0 CASE_NO
+if "%~2"=="" (
+    echo Usage: %~nx0 CASE_NO EVIDENCE_ID
+    echo   EVIDENCE_ID: evidence id for a PC/server/HDD, e.g. E001
     exit /b 1
 )
 
 set "CASE_NO=%~1"
+set "EVIDENCE_ID=%~2"
 set "KIT_ROOT=%~dp0"
 REM CASES is under the CURRENT directory (cd to your save media first; same as create_case_dirs.cmd)
-set "CASE_ROOT=%CD%\CASES\%CASE_NO%"
+set "CASE_ROOT=%CD%\CASES\%CASE_NO%\%EVIDENCE_ID%"
 set "LOG_DIR=%CASE_ROOT%\logs"
 set "LOGFILE=%LOG_DIR%\disk-info.log"
 
 if not exist "%LOG_DIR%" (
     echo ERROR: Case directory not found.
-    echo Run create_case_dirs.cmd %CASE_NO% first.
+    echo Run create_case_dirs.cmd %CASE_NO% %EVIDENCE_ID% first.
     exit /b 1
 )
 
@@ -42,6 +44,7 @@ echo =====================================
 echo Disk Information
 echo =====================================
 echo Case=%CASE_NO%
+echo Evidence=%EVIDENCE_ID%
 echo Date=%DATE% %TIME%
 echo.
 ) > "%LOGFILE%"

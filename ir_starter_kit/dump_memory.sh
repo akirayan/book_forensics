@@ -13,12 +13,12 @@
 #   後から材料を入手できなくなる。だからメモリと同時に、DWARF 付き vmlinux /
 #   System.map / kallsyms / config / BTF を押さえる。――「メモリだけでは半分の証拠」。
 #
-# 使い方:  sudo ./dump_memory_linux.sh <CASE_ID>
-#   例:    cd /mnt/ssd && sudo /path/to/kit/dump_memory_linux.sh C26015
-#   出力:  カレントに C26015/ を作り、その下に
-#            C26015/memory/   … メモリイメージ(.lime)
-#            C26015/symbols/  … シンボル材料(kernel.release/vmlinux/System.map/kallsyms/config/BTF)
-#            C26015/logs/     … システム情報・manifest(SHA-256)
+# 使い方:  sudo ./dump_memory.sh <CASE_NO> <EVIDENCE_ID>
+#   例:    cd /mnt/ssd && sudo /path/to/kit/dump_memory.sh C26015 E001
+#   出力:  カレントに CASES/<CASE_NO>/<EVIDENCE_ID>/ を作り、その下に
+#            memory/   … メモリイメージ(.lime)
+#            symbols/  … シンボル材料(kernel.release/vmlinux/System.map/kallsyms/config/BTF)
+#            logs/     … システム情報・manifest(SHA-256)
 #   arch は uname -m で自動判定し、キット内の avml を選ぶ:
 #            avml/avml（x86_64） / avml/avml-aarch64（ARM64）
 #
@@ -35,6 +35,7 @@ ARCH=$(uname -m)
 TS=$(date +%Y%m%d-%H%M%S)
 
 CASE="${1:-}"
+EVID="${2:-}"
 
 say(){  printf '\033[1;34m[*]\033[0m %s\n' "$*" >&2; }
 warn(){ printf '\033[1;33m[!]\033[0m %s\n' "$*" >&2; }
@@ -57,7 +58,11 @@ record(){
 }
 
 # ---- 事前チェック ---------------------------------------------------------
-[ -n "$CASE" ] || { err "usage: sudo $0 <CASE_ID>   例: $0 C26015"; exit 1; }
+if [ -z "$CASE" ] || [ -z "$EVID" ]; then
+  err "usage: sudo $0 <CASE_NO> <EVIDENCE_ID>   例: $0 C26015 E001"; exit 1
+fi
+case "$CASE" in ''|*[!A-Za-z0-9._-]*) err "CASE_NO は A-Za-z0-9._- のみ"; exit 1;; esac
+case "$EVID" in ''|*[!A-Za-z0-9._-]*) err "EVIDENCE_ID は A-Za-z0-9._- のみ"; exit 1;; esac
 
 if [ "$(id -u)" != "0" ]; then
   err "root で実行すること（メモリ取得・kallsyms の実アドレスに必要）。 sudo $0 $CASE"
@@ -80,8 +85,8 @@ if [ ! -x "$AVML" ]; then
   exit 1
 fi
 
-# ケースのフォルダ（カレントに作る＝持ち帰れる）
-CASE_ROOT="./$CASE"
+# 証拠のフォルダ（カレントに作る＝持ち帰れる。他スクリプトと同じ CASES/<CASE>/<EVID>/ に統一）
+CASE_ROOT="./CASES/$CASE/$EVID"
 MEM_DIR="$CASE_ROOT/memory"
 SYM_DIR="$CASE_ROOT/symbols"
 LOG_DIR="$CASE_ROOT/logs"
@@ -89,7 +94,7 @@ mkdir -p "$MEM_DIR" "$SYM_DIR" "$LOG_DIR" || { err "出力先を作れない: $C
 MANIFEST="$LOG_DIR/manifest.txt"
 : > "$MANIFEST"
 
-say "case : $CASE  ->  $CASE_ROOT/"
+say "case : $CASE  evidence: $EVID  ->  $CASE_ROOT/"
 say "host : $HOST"
 say "kernel: $KREL ($ARCH)"
 say "avml : $AVML"
@@ -113,7 +118,7 @@ cp -f /proc/version "$SYM_DIR/proc_version.txt" 2>/dev/null && record "$SYM_DIR/
 
 # ---- 2) メモリ取得（AVML。LiME 形式で出力＝LiME モジュールは使わない） ----
 say "== 2) メモリ取得（AVML） =="
-IMG="$MEM_DIR/memory_${HOST}_${TS}.lime"
+IMG="$MEM_DIR/${EVID}_memory_${HOST}_${TS}.lime"
 say "AVML 実行中… （$IMG）"
 if "$AVML" acquire "$IMG" ; then
   say "メモリ取得 完了"
@@ -159,8 +164,8 @@ fi
 say "== 完了（情報収集のみ。ISF は作っていない） =="
 say "収集物とハッシュ: $MANIFEST （manifest の SHA-256: $(sha256_of "$MANIFEST")）"
 say "次の手順:"
-say "  1) この $CASE フォルダを解析側（mac か x86_64 Linux）へ持ち帰ってコピーする"
-say "  2) そこで  create_isf_linux.sh $CASE  を実行して ISF を生成する"
+say "  1) この CASES/$CASE/$EVID フォルダを解析側（mac か x86_64 Linux）へ持ち帰ってコピーする"
+say "  2) そこで  create_isf_linux.sh $CASE $EVID  を実行して ISF を生成する"
 say "  3) ISF を Volatility の symbols/linux/ に置き、"
 say "     vol -f $IMG banners.Banners で版を確認 → mem_triage.sh $IMG linux"
 say "イメージ: $IMG"

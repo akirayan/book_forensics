@@ -2,18 +2,19 @@
 # ewf_imager.sh — Linux 版ディスク保全（ewf_imager.cmd と対。libewf / ewftools 使用）
 #
 # 使い方:
-#   ./ewf_imager.sh CASE_NO DESCRIPTION EXAMINER TARGET
+#   ./ewf_imager.sh CASE_NO EVIDENCE_ID DESCRIPTION EXAMINER TARGET
+#     EVIDENCE_ID: 証拠(PC/サーバ/HDD)ごとの ID（例 E001）
 #     TARGET: ブロックデバイス名（例 sdb, nvme0n1）または絶対パス（/dev/sdb）
 #
 # 例:
-#   ./ewf_imager.sh C26010 "Dell Latitude 5540, disk0" endoaki sdb
+#   ./ewf_imager.sh C26010 E001 "Dell Latitude 5540, disk0" endoaki sdb
 #
-# 出力は キット直下 CASES/<CASE_NO>/ に保存する:
-#   acquisition/<CASE_NO>_<dev>.E01        … イメージ
-#   acquisition/<CASE_NO>_<dev>.E01.txt    … FTK Imager 風の要約（E01 の隣。ひと目で分かる）
+# 出力は キット直下 CASES/<CASE_NO>/<EVIDENCE_ID>/ に保存する:
+#   acquisition/<CASE_NO>_<EVIDENCE_ID>_<dev>.E01        … イメージ
+#   acquisition/<CASE_NO>_<EVIDENCE_ID>_<dev>.E01.txt    … FTK Imager 風の要約（E01 の隣）
 #   logs/<dev>_acquisition.log / _verify.log / _info.log … 詳細ログ
 #
-# 先に ./create_case_dirs.sh CASE_NO で骨格を作っておくこと。
+# 先に ./create_case_dirs.sh CASE_NO EVIDENCE_ID で骨格を作っておくこと。
 #
 # NOTE: 判断はしない。どのデバイスを取得するかは調査担当者が決める。
 #       保全先（この SSD）を誤って指定しないよう、先に ./list_disk.sh で確認すること。
@@ -25,16 +26,22 @@ set -u
 #     /mnt/fileserver/scripts/ewf_imager.sh を実行する（キットはフルパスで呼ぶ）。
 CASE_BASE="$PWD"
 
-if [ "$#" -ne 4 ]; then
-    echo "Usage: $0 CASE_NO DESCRIPTION EXAMINER TARGET"
+if [ "$#" -ne 5 ]; then
+    echo "Usage: $0 CASE_NO EVIDENCE_ID DESCRIPTION EXAMINER TARGET"
+    echo "  EVIDENCE_ID: evidence (PC/server/HDD) id, e.g. E001"
     echo "  TARGET: block device name (sdb, nvme0n1) or absolute path (/dev/sdb)"
     exit 1
 fi
 
 CASE_NO="$1"
-DESCRIPTION="$2"
-EXAMINER="$3"
-TARGET="$4"
+EVID="$2"
+DESCRIPTION="$3"
+EXAMINER="$4"
+TARGET="$5"
+
+# CASE_NO / EVIDENCE_ID はフォルダ名になる。安全な文字だけ許す。
+case "$CASE_NO" in ''|*[!A-Za-z0-9._-]*) echo "ERROR: CASE_NO は A-Za-z0-9._- のみ: '$CASE_NO'"; exit 1;; esac
+case "$EVID"    in ''|*[!A-Za-z0-9._-]*) echo "ERROR: EVIDENCE_ID は A-Za-z0-9._- のみ: '$EVID'"; exit 1;; esac
 
 # TARGET を /dev/ 絶対パスへ正規化
 case "$TARGET" in
@@ -43,10 +50,10 @@ case "$TARGET" in
 esac
 DEVBASE="$(basename "$SOURCE")"
 
-CASE_ROOT="$CASE_BASE/CASES/$CASE_NO"
+CASE_ROOT="$CASE_BASE/CASES/$CASE_NO/$EVID"
 ACQ_DIR="$CASE_ROOT/acquisition"
 LOG_DIR="$CASE_ROOT/logs"
-IMAGE_BASE="${CASE_NO}_${DEVBASE}"
+IMAGE_BASE="${CASE_NO}_${EVID}_${DEVBASE}"
 TARGET_BASE="$ACQ_DIR/$IMAGE_BASE"
 E01_FILE="${TARGET_BASE}.E01"
 E01_TXT="${TARGET_BASE}.E01.txt"           # FTK Imager 風の要約（E01 の隣）
@@ -55,7 +62,7 @@ VERIFY_LOG="$LOG_DIR/${DEVBASE}_verify.log"
 INFO_LOG="$LOG_DIR/${DEVBASE}_info.log"
 
 if [ ! -d "$ACQ_DIR" ]; then
-    echo "ERROR: $ACQ_DIR がない。先に  ./create_case_dirs.sh $CASE_NO  を実行する。"
+    echo "ERROR: $ACQ_DIR がない。先に  ./create_case_dirs.sh $CASE_NO $EVID  を実行する。"
     exit 1
 fi
 if [ ! -b "$SOURCE" ]; then
@@ -77,6 +84,7 @@ ACQ_START="$(date '+%Y-%m-%d %H:%M:%S')"
   echo "Acquisition Log"
   echo "==========================================================="
   echo "Case Number : $CASE_NO"
+  echo "Evidence ID : $EVID"
   echo "Examiner    : $EXAMINER"
   echo "Description : $DESCRIPTION"
   echo "Source Disk : $SOURCE"
@@ -160,6 +168,7 @@ VERIFY_RESULT="$(grep -m1 '^ewfverify:' "$VERIFY_LOG" 2>/dev/null | sed 's/^ewfv
   echo
   echo "Case Information:"
   echo "  Case Number:         $CASE_NO"
+  echo "  Evidence ID:         $EVID"
   echo "  Unique Description:  $DESCRIPTION"
   echo "  Examiner:            $EXAMINER"
   echo
