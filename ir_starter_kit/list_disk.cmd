@@ -110,6 +110,13 @@ powershell -NoProfile -Command "try { $v=(Get-CimInstance -ClassName Win32_Devic
 
 echo.>> "%LOGFILE%"
 
+REM show the saved log on screen as well (Linux list_disk.sh uses tee for this)
+echo.
+echo ===== disk-info.log =====
+type "%LOGFILE%"
+echo =========================
+echo.
+
 echo Done.
 echo Log file:
 echo %LOGFILE%
