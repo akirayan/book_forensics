@@ -1,0 +1,20 @@
+# Disk DescriptorFile
+version=1
+encoding="UTF-8"
+CID=603f36ca
+parentCID=ffffffff
+createType="monolithicFlat"
+
+# Extent description
+RW 20480 FLAT "HDD10MB-flat.vmdk" 0
+
+# The Disk Data Base 
+#DDB
+
+ddb.adapterType = "lsilogic"
+ddb.geometry.cylinders = "10"
+ddb.geometry.heads = "64"
+ddb.geometry.sectors = "32"
+ddb.longContentID = "0bbf5cd8aa23fea41c62e4fb603f36ca"
+ddb.uuid = "60 00 C2 9c 40 29 59 84-e5 f6 ea 67 93 4b f9 57"
+ddb.virtualHWVersion = "22"
