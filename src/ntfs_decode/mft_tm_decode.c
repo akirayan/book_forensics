@@ -2,21 +2,17 @@
  * mft_tm_decode.c - NTFS MFT タイムスタンプ解析ツール
  *
  * 各 MFT レコードから $STANDARD_INFORMATION と $FILE_NAME の
- * 8 つのタイムスタンプをすべて抽出し CSV に出力する。
+ * 8 つのタイムスタンプをすべて抽出し CSV に出力する【デコード専用】。
  *
- * $SI と $FN のタイムスタンプを横に並べて比較することで
- * Timestomping（改ざん）の痕跡を検出できる。
+ * Timestomping の判定は本ツールでは行わない。出力した CSV を別ツール
+ * tm_judge に渡してスコアリングする（Unix 流に「取り出す」と「判断する」を分離）:
+ *   sudo ./mft_tm_decode /dev/loop0p1 | ./tm_judge
  *
  * 出力列:
  *   mft_ref, status,
  *   si_created, si_modified, si_mft_modified, si_accessed,
  *   fn_created, fn_modified, fn_mft_modified, fn_accessed,
- *   filename, timestomp
- *
- * timestomp 列:
- *   OK      … $SI と $FN に矛盾なし
- *   SUSPECT … $SI の Modified または Created が $FN より古い（改ざんの疑い）
- *   NO_FN   … $FILE_NAME 属性が存在しない（メタファイルなど）
+ *   filename
  *
  * コンパイル:
  *   cc -O2 -Wall -o mft_tm_decode mft_tm_decode.c            # Linux
@@ -332,63 +328,15 @@ typedef struct {
     int      valid; /* 1=属性が存在した, 0=存在しない */
 } TsSet;
 
-/* ============================================================
- *  Timestomping 判定
- *
- *  改ざん検出の基本原理:
- *    通常の操作では $SI のタイムスタンプは $FN 以降（>=）になる。
- *    $SI の Modified や Created が $FN より古い場合、
- *    $SI が後から書き換えられた（Timestomping）可能性が高い。
- *
- *  判定条件（いずれか一つでも真なら SUSPECT）:
- *    (1) $SI.modified   < $FN.modified    … 最も強い指標
- *    (2) $SI.created    < $FN.created     … 遡及した作成日時
- *    (3) $SI.modified の sub-second 部が 0 かつ $FN.modified が非 0
- *        … SetFileTime() で秒単位に丸められた痕跡
- * ============================================================ */
-#define SUBSEC(ts)  ((ts) % 10000000ULL)   /* 100ns 以下のサブ秒部 */
-
-typedef enum {
-    TS_OK = 0,    /* 矛盾なし */
-    TS_SUSPECT,   /* 改ざんの疑い */
-    TS_NO_FN      /* $FN なし（メタファイル等）*/
-} TsVerdict;
-
-static TsVerdict judge_timestomp(const TsSet *si, const TsSet *fn) {
-    if (!fn->valid) return TS_NO_FN;
-
-    /* 条件 (1): $SI.modified < $FN.modified */
-    if (si->modified > 0 && fn->modified > 0 &&
-        si->modified < fn->modified)
-        return TS_SUSPECT;
-
-    /* 条件 (2): $SI.created < $FN.created */
-    if (si->created > 0 && fn->created > 0 &&
-        si->created < fn->created)
-        return TS_SUSPECT;
-
-    /* 条件 (3): $SI.modified のサブ秒が 0 かつ $FN.modified が非 0 */
-    if (fn->modified > 0 && si->modified > 0 &&
-        SUBSEC(si->modified) == 0 && SUBSEC(fn->modified) != 0)
-        return TS_SUSPECT;
-
-    return TS_OK;
-}
-
-static const char *verdict_str(TsVerdict v) {
-    switch (v) {
-        case TS_OK:      return "OK";
-        case TS_SUSPECT: return "SUSPECT";
-        case TS_NO_FN:   return "NO_FN";
-    }
-    return "?";
-}
+/* 判定（Timestomping スコアリング）は本ツールでは行わない。
+ * 出力した 8 タイムスタンプ CSV を、別ツール tm_judge に渡して評価する
+ * （Unix 流に「取り出す」と「判断する」を分離）。 */
 
 /* ============================================================
  *  レコード 1 件の処理
  * ============================================================ */
 static void process_record(const uint8_t *rec_buf, FILE *out_fp,
-                            uint64_t *cnt_ok, uint64_t *cnt_suspect) {
+                            uint64_t *cnt_emitted) {
     const MFT_RECORD *mft = (const MFT_RECORD *)rec_buf;
 
     const char *status = (mft->flags & MFT_RECORD_IN_USE) ? "IN_USE" : "DELETED";
@@ -480,10 +428,7 @@ static void process_record(const uint8_t *rec_buf, FILE *out_fp,
         snprintf(best_name, MAX_NAME_UTF8, "%s", fn_all[best_idx].name);
     }
 
-    /* Timestomping 判定 */
-    TsVerdict verdict = judge_timestomp(&si, &fn);
-
-    /* ── CSV 出力 ── */
+    /* ── CSV 出力（デコードのみ。判定は別ツール tm_judge が行う） ── */
     char si_cr[40], si_mo[40], si_mm[40], si_ac[40];
     char fn_cr[40], fn_mo[40], fn_mm[40], fn_ac[40];
     filetime_to_str(si.created,      si_cr, sizeof(si_cr));
@@ -499,7 +444,7 @@ static void process_record(const uint8_t *rec_buf, FILE *out_fp,
      * mft_ref,status,
      * si_created,si_modified,si_mft_modified,si_accessed,
      * fn_created,fn_modified,fn_mft_modified,fn_accessed,
-     * filename,timestomp
+     * filename
      */
     fprintf(out_fp, "%llu:%u,%s,",
             (unsigned long long)mft->mft_record_number,
@@ -513,18 +458,16 @@ static void process_record(const uint8_t *rec_buf, FILE *out_fp,
     csv_field(out_fp, fn_mo); fputc(',', out_fp);
     csv_field(out_fp, fn_mm); fputc(',', out_fp);
     csv_field(out_fp, fn_ac); fputc(',', out_fp);
-    csv_field(out_fp, best_name); fputc(',', out_fp);
-    fprintf(out_fp, "%s\n", verdict_str(verdict));
+    csv_field(out_fp, best_name); fputc('\n', out_fp);
 
-    if (verdict == TS_SUSPECT) (*cnt_suspect)++;
-    else                        (*cnt_ok)++;
+    (*cnt_emitted)++;
 }
 
 /* ============================================================
  *  MFT 全走査
  * ============================================================ */
 static void scan_mft(const uint8_t *mft0_buf, FILE *out_fp,
-                     uint64_t *cnt_ok, uint64_t *cnt_suspect,
+                     uint64_t *cnt_emitted,
                      uint64_t *cnt_total) {
     const MFT_RECORD *mft0 = (const MFT_RECORD *)mft0_buf;
 
@@ -591,7 +534,7 @@ static void scan_mft(const uint8_t *mft0_buf, FILE *out_fp,
                 MFT_RECORD *mft = (MFT_RECORD *)rec_buf;
                 if (mft->magic == MFT_RECORD_MAGIC) {
                     apply_fixup(rec_buf, g_mft_record_size);
-                    process_record(rec_buf, out_fp, cnt_ok, cnt_suspect);
+                    process_record(rec_buf, out_fp, cnt_emitted);
                 }
             }
             pos     += g_mft_record_size;
@@ -687,17 +630,17 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    /* CSV ヘッダ */
+    /* CSV ヘッダ（デコードのみ。判定列は持たない） */
     fprintf(out_fp,
             "mft_ref,status,"
             "si_created,si_modified,si_mft_modified,si_accessed,"
             "fn_created,fn_modified,fn_mft_modified,fn_accessed,"
-            "filename,timestomp\n");
+            "filename\n");
 
     /* 全 MFT レコード走査 */
     fprintf(stderr, "# スキャン中...\n");
-    uint64_t cnt_ok = 0, cnt_suspect = 0, cnt_total = 0;
-    scan_mft(mft0_buf, out_fp, &cnt_ok, &cnt_suspect, &cnt_total);
+    uint64_t cnt_emitted = 0, cnt_total = 0;
+    scan_mft(mft0_buf, out_fp, &cnt_emitted, &cnt_total);
 
     if (out_fp != stdout) fclose(out_fp);
     free(mft0_buf);
@@ -705,8 +648,7 @@ int main(int argc, char *argv[]) {
 
     fprintf(stderr, "# ─────────────────────────────────\n");
     fprintf(stderr, "# MFT レコード総数  : %llu\n", (unsigned long long)cnt_total);
-    fprintf(stderr, "# OK                : %llu\n", (unsigned long long)cnt_ok);
-    fprintf(stderr, "# SUSPECT           : %llu\n", (unsigned long long)cnt_suspect);
+    fprintf(stderr, "# 出力レコード数    : %llu\n", (unsigned long long)cnt_emitted);
     if (csv_path)
         fprintf(stderr, "# 出力ファイル      : %s\n", csv_path);
 
