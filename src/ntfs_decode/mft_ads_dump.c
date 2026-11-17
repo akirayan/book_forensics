@@ -19,7 +19,8 @@
  *       → 指定 ADS を hex ダンプ付きで表示
  *
  * コンパイル:
- *   gcc -O2 -Wall -o mft_ads_dump mft_ads_dump.c
+ *   cc -O2 -Wall -o mft_ads_dump mft_ads_dump.c            # Linux（cc は gcc へのリンク）
+ *   cc -O2 -Wall -o mft_ads_dump mft_ads_dump.c -liconv    # macOS（iconv を明示リンク）
  *
  * 例:
  *   sudo ./mft_ads_dump /dev/loop0 1234

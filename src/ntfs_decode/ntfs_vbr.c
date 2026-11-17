@@ -4,8 +4,7 @@
  * Usage: ntfs_vbr <device|image> [partition_offset_bytes]
  *
  * コンパイル:
- *   cc  -O2 -Wall -o ntfs_vbr ntfs_vbr.c   # macOS
- *   gcc -O2 -Wall -o ntfs_vbr ntfs_vbr.c   # Linux
+ *   cc -O2 -Wall -o ntfs_vbr ntfs_vbr.c    # Linux / macOS 共通（iconv 不要）
  *
  * 実行例:
  *   sudo ./ntfs_vbr /dev/loop1p1
