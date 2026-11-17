@@ -11,7 +11,7 @@
  *   modified_tm, accessed_tm, created_tm, filename, fullpath, file_size
  *
  * コンパイル:
- *   cc -O2 -Wall -o mft_decode mft_decode.c            # Linux（cc は gcc へのリンク）
+ *   cc -O2 -Wall -o mft_decode mft_decode.c            # Linux
  *   cc -O2 -Wall -o mft_decode mft_decode.c -liconv    # macOS（iconv を明示リンク）
  *
  * 実行:

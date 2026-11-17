@@ -467,11 +467,11 @@ static void dump_one_ads(const AdsInfo *a, const char *fname,
     }
 
     printf("\n");
-    printf("╔══════════════════════════════════════════════════════╗\n");
+    printf("--------------------------------------------\n");
     printf("  ADS : %s:%s\n", fname, a->name);
     printf("  種別: %s\n", a->non_resident ? "非常駐 (Non-Resident)" : "常駐 (Resident)");
     printf("  サイズ: %llu bytes\n", (unsigned long long)size);
-    printf("╚══════════════════════════════════════════════════════╝\n");
+    printf("--------------------------------------------\n");
 
     if (size == 0) {
         printf("[空の ADS]\n");
