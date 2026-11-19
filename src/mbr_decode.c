@@ -8,22 +8,47 @@
 #define SECTOR_SIZE  512
 #define MAX_LOGICAL  60
 
-static const struct { uint8_t id; const char *name; } SYS_IDS[] = {
-    { 0x00, "Empty"             },
-    { 0x05, "Extended (CHS)"   },
-    { 0x07, "NTFS/exFAT"       },
-    { 0x0B, "FAT32 (CHS)"      },
-    { 0x0C, "FAT32 (LBA)"      },
-    { 0x0F, "Extended (LBA)"   },
-    { 0x82, "Linux Swap"       },
-    { 0x83, "Linux Filesystem" },
-    { 0xEE, "GPT Protective"   },
-    { 0xEF, "EFI System"       },
+/* MBR パーティションタイプ表（gpt_decode.c の mbr_types[] と共通・同一に保つ） */
+typedef struct { uint8_t id; const char *desc; } MBR_TypeEntry;
+static const MBR_TypeEntry mbr_types[] = {
+    {0x00, "Empty"},
+    {0x01, "FAT12"},
+    {0x04, "FAT16 (<32MB)"},
+    {0x05, "Extended (CHS)"},
+    {0x06, "FAT16"},
+    {0x07, "NTFS / exFAT / HPFS"},
+    {0x0B, "FAT32"},
+    {0x0C, "FAT32 (LBA)"},
+    {0x0E, "FAT16 (LBA)"},
+    {0x0F, "Extended (LBA)"},
+    {0x11, "Hidden FAT12"},
+    {0x14, "Hidden FAT16 (<32MB)"},
+    {0x16, "Hidden FAT16"},
+    {0x17, "Hidden NTFS / exFAT"},
+    {0x1B, "Hidden FAT32"},
+    {0x1C, "Hidden FAT32 (LBA)"},
+    {0x27, "Windows RE (hidden)"},
+    {0x42, "Windows Dynamic / LDM"},
+    {0x82, "Linux Swap / Solaris"},
+    {0x83, "Linux Filesystem"},
+    {0x84, "OS/2 Boot Manager"},
+    {0x85, "Linux Extended"},
+    {0x86, "Linux RAID"},
+    {0x8E, "Linux LVM"},
+    {0xA5, "FreeBSD"},
+    {0xA6, "OpenBSD"},
+    {0xA8, "macOS X"},
+    {0xAF, "macOS X HFS+"},
+    {0xEE, "GPT Protective MBR"},
+    {0xEF, "EFI System Partition (FAT)"},
+    {0xFB, "VMware VMFS"},
+    {0xFD, "Linux RAID auto-detect"},
+    {0xFE, "LANstep / IBM IML"},
 };
 
-static const char *sys_name(uint8_t id) {
-    for (size_t i = 0; i < sizeof SYS_IDS / sizeof SYS_IDS[0]; i++)
-        if (SYS_IDS[i].id == id) return SYS_IDS[i].name;
+static const char *mbr_type_str(uint8_t id) {
+    for (size_t i = 0; i < sizeof(mbr_types) / sizeof(mbr_types[0]); i++)
+        if (mbr_types[i].id == id) return mbr_types[i].desc;
     return "Unknown";
 }
 
@@ -59,7 +84,7 @@ static void print_row(const char *label, Entry *e) {
            e->lba_start,
            e->sectors,
            mb,
-           sys_name(e->sys_id));
+           mbr_type_str(e->sys_id));
 }
 
 static void walk_ebr(FILE *f, uint32_t ext_base,

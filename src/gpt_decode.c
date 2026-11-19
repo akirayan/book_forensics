@@ -176,6 +176,7 @@ static const MBR_TypeEntry mbr_types[] = {
     {0x07, "NTFS / exFAT / HPFS"},
     {0x0B, "FAT32"},
     {0x0C, "FAT32 (LBA)"},
+    {0x0E, "FAT16 (LBA)"},
     {0x0F, "Extended (LBA)"},
     {0x11, "Hidden FAT12"},
     {0x14, "Hidden FAT16 (<32MB)"},
