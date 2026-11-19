@@ -1,13 +1,12 @@
 #!/bin/bash
 # ============================================================
-# lifecycle.sh v04
+# lifecycle.sh v05
 #
 # 指定した MFT# のファイル/フォルダのライフサイクルを調査する
 #
 # 使い方:
 #   bash lifecycle.sh <MFT#>
-#   例: bash lifecycle.sh 7966
-#        bash lifecycle.sh 18110
+#   例: bash lifecycle.sh 55
 #
 # v02 からの修正:
 #   [Fix1] ファイル名フィルタ：ターゲットと無関係な MFT 再利用を識別
@@ -17,6 +16,10 @@
 #          （mft_tm_decode を decode 専用に分離し判定列を廃止したため）
 #   [Fix5] Section 2 の存在チェック awk の exit が if の外にあり、先頭データ
 #          行しか見ずに常に「記録なし」になっていた不具合を修正（exit を if 内へ）
+#   [Fix6] Section 5 のトランザクション完了判定を CommitTransaction から
+#          ForgetTransaction に修正。実機の $LogFile では通常のファイル操作に
+#          CommitTransaction は現れず、完了は ForgetTransaction で示されるため
+#          （「$LogFile の構造と解析」章の実測による）
 # ============================================================
 
 # ── 設定 ────────────────────────────────────────────────────
@@ -42,7 +45,7 @@ for f in "$MFT_DECODE_CSV" "$TIMESTAMP_CSV" "$USNJOURNAL_CSV" "$LOGFILE_CSV"; do
 done
 
 echo "============================================================"
-echo " lifecycle.sh v04  MFT# $MFT_NUMBER"
+echo " lifecycle.sh v05  MFT# $MFT_NUMBER"
 echo "============================================================"
 
 # ── ターゲットファイル名（mft_decode の最新エントリから取得）──
@@ -393,15 +396,17 @@ else
             printf "    LSN:%-15s  TransID=%-8s\n", $1, $4 }'
 
     echo ""
-    echo "  ── CommitTransaction（操作の確定確認）──"
+    echo "  ── トランザクション完了（ForgetTransaction）──"
+    # 実機の $LogFile では通常操作に CommitTransaction は出ず、完了は
+    # ForgetTransaction で示される（「$LogFile の構造と解析」章の実測）
     for tid in $(echo "$LOG_ENTRIES" | awk -F',' '{print $4}' | sort -u); do
-        COMMITTED=$(awk -F',' -v t="$tid" '
-            $4 == t && $5 == "CommitTransaction"
+        DONE=$(awk -F',' -v t="$tid" '
+            $4 == t && $5 == "ForgetTransaction"
         ' "$LOGFILE_CSV" | wc -l | tr -d ' ')
-        if [ "$COMMITTED" -gt 0 ]; then
-            echo "    TransID=$tid → CommitTransaction あり（確定）"
+        if [ "$DONE" -gt 0 ]; then
+            echo "    TransID=$tid → ForgetTransaction あり（完了）"
         else
-            echo "    TransID=$tid → CommitTransaction なし（未コミット）"
+            echo "    TransID=$tid → ForgetTransaction なし（完了記録なし）"
         fi
     done
 fi
@@ -530,5 +535,5 @@ done
 
 echo ""
 echo "============================================================"
-echo " 完了  (lifecycle.sh v03)"
+echo " 完了  (lifecycle.sh v05)"
 echo "============================================================"
