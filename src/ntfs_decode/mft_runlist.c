@@ -1,5 +1,5 @@
 /*
- * runlist_decode.c - NTFS 非常駐属性のランリスト(DATA RUN)解読ツール
+ * mft_runlist.c - NTFS 非常駐属性のランリスト(DATA RUN)解読ツール
  *
  * 機能:
  *   MFT# を指定して、そのエントリの非常駐 $DATA 属性に格納された
@@ -12,19 +12,19 @@
  *   データの位置を特定するだけで、ランを人間可読で出力はしない。
  *
  * 使い方:
- *   sudo ./runlist_decode <デバイス> <MFT#>
+ *   sudo ./mft_runlist <デバイス> <MFT#>
  *       → 無名 $DATA のランリストを表示 (例: $MFT=0, 一般ファイル)
  *
- *   sudo ./runlist_decode <デバイス> <MFT#> -name <ADS名>
+ *   sudo ./mft_runlist <デバイス> <MFT#> -name <ADS名>
  *       → 名前付き $DATA (ADS) のランリストを表示
  *
  * コンパイル:
- *   cc -O2 -Wall -o runlist_decode runlist_decode.c            # Linux
- *   cc -O2 -Wall -o runlist_decode runlist_decode.c -liconv    # macOS
+ *   cc -O2 -Wall -o mft_runlist mft_runlist.c            # Linux
+ *   cc -O2 -Wall -o mft_runlist mft_runlist.c -liconv    # macOS
  *
  * 例:
- *   sudo ./runlist_decode /dev/loop0p1 0        # $MFT 自身のランリスト
- *   sudo ./runlist_decode /dev/loop0p1 45       # 一般ファイル
+ *   sudo ./mft_runlist /dev/loop0p1 0        # $MFT 自身のランリスト
+ *   sudo ./mft_runlist /dev/loop0p1 45       # 一般ファイル
  */
 
 #include <stdio.h>
