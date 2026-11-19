@@ -76,15 +76,24 @@ typedef struct __attribute__((packed)) {
 } EBR;
 
 static void print_row(const char *label, Entry *e) {
+    const char *type = mbr_type_str(e->sys_id);
+    /* 空きスロット（型0・開始0・セクタ0）は数値を "-" で表示 */
+    if (e->sys_id == 0 && e->lba_start == 0 && e->sectors == 0) {
+        printf("%-4s %-6s 0x%02X  %-10s %-10s %-10s %-8s %s\n",
+               label, "No", e->sys_id, "-", "-", "-", "-", type);
+        return;
+    }
     double mb = (double)e->sectors * SECTOR_SIZE / (1024.0 * 1024.0);
-    printf("%-4s %-6s 0x%02X  %-12u %-12u %-9.1f %s\n",
+    unsigned lba_end = e->lba_start + e->sectors - 1;  /* 終端LBA（含む） */
+    printf("%-4s %-6s 0x%02X  %-10u %-10u %-10u %-8.1f %s\n",
            label,
            e->boot == 0x80 ? "Yes" : "No",
            e->sys_id,
            e->lba_start,
+           lba_end,
            e->sectors,
            mb,
-           mbr_type_str(e->sys_id));
+           type);
 }
 
 static void walk_ebr(FILE *f, uint32_t ext_base,
@@ -131,24 +140,38 @@ int main(int argc, char *argv[]) {
         fclose(f); return 1;
     }
 
+    /* ディスク総サイズ。ファイルならサイズから、デバイスでも lseek(END) で取れる。
+       1セクタ=512B は仮定で、MBRには格納されていない（デバイスなら ioctl で実値）。 */
+    fseek(f, 0, SEEK_END);
+    long disk_bytes = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    const char *label_type = "MBR (dos)";
+    for (int i = 0; i < 4; i++)
+        if (mbr.entry[i].sys_id == 0xEE) label_type = "GPT (protective MBR)";
+
     printf("Disk: %s\n", argv[1]);
-    /* disk_sig は LE 格納。ディスク署名の「値」は逆順で表示する
-       （fdisk の 0xXXXXXXXX 表記に一致させる） */
+    printf("Disk size:      %.1f MiB (%ld bytes, %ld sectors @ %d B/sec assumed)\n",
+           disk_bytes / (1024.0 * 1024.0), disk_bytes,
+           disk_bytes / SECTOR_SIZE, SECTOR_SIZE);
+    printf("Sector size:    %d bytes (assumed; not stored in MBR)\n", SECTOR_SIZE);
+    /* disk_sig は LE 格納。署名の「値」は逆順で表示する（fdisk の 0x... に一致） */
     printf("Disk Signature: %02x%02x%02x%02x\n",
            mbr.disk_sig[3], mbr.disk_sig[2],
            mbr.disk_sig[1], mbr.disk_sig[0]);
+    printf("MBR Signature:  0x%04X (OK)\n", mbr.signature);
+    printf("Disklabel:      %s\n", label_type);
     printf("\n");
-    printf("%-4s %-6s %-5s %-12s %-12s %-9s %s\n",
-           "#", "Boot", "SysID", "LBA_Start", "Sectors", "Size_MB", "Type");
-    printf("%-4s %-6s %-5s %-12s %-12s %-9s %s\n",
-           "----", "------", "-----", "------------", "------------",
-           "---------", "----");
+    printf("%-4s %-6s %-5s %-10s %-10s %-10s %-8s %s\n",
+           "#", "Boot", "SysID", "LBA_Start", "LBA_End", "Sectors", "Size_MB", "Type");
+    printf("%-4s %-6s %-5s %-10s %-10s %-10s %-8s %s\n",
+           "----", "------", "-----", "----------", "----------", "----------",
+           "--------", "----");
 
     uint32_t ext_base = 0;
 
     for (int i = 0; i < 4; i++) {
         Entry *e = &mbr.entry[i];
-        if (e->sys_id == 0 && e->lba_start == 0) continue;
         char label[8];
         snprintf(label, sizeof label, "P%d", i + 1);
         print_row(label, e);
@@ -159,11 +182,11 @@ int main(int argc, char *argv[]) {
     if (ext_base != 0) {
         printf("\n--- Extended Partition (EBR chain from LBA %u) ---\n\n",
                ext_base);
-        printf("%-4s %-6s %-5s %-12s %-12s %-9s %s\n",
-               "#", "Boot", "SysID", "LBA_Start", "Sectors", "Size_MB", "Type");
-        printf("%-4s %-6s %-5s %-12s %-12s %-9s %s\n",
-               "----", "------", "-----", "------------", "------------",
-               "---------", "----");
+        printf("%-4s %-6s %-5s %-10s %-10s %-10s %-8s %s\n",
+               "#", "Boot", "SysID", "LBA_Start", "LBA_End", "Sectors", "Size_MB", "Type");
+        printf("%-4s %-6s %-5s %-10s %-10s %-10s %-8s %s\n",
+               "----", "------", "-----", "----------", "----------", "----------",
+               "--------", "----");
         int logical_num = 5;
         walk_ebr(f, ext_base, ext_base, &logical_num);
     }

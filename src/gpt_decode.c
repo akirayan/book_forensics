@@ -431,9 +431,10 @@ static int parse_gpt(FILE *f, uint64_t header_lba, ParsedGPT *out) {
 
 static void print_mbr_table(const ParsedMBR *mbr) {
     printf("\n--- LBA 0: MBR (Master Boot Record) ---\n");
-    printf("  Disk Signature: %02X %02X %02X %02X\n",
-           mbr->disk_sig[0], mbr->disk_sig[1],
-           mbr->disk_sig[2], mbr->disk_sig[3]);
+    /* disk_sig は LE 格納。署名の「値」は逆順で表示（mbr_decode・fdisk の 0x... に一致） */
+    printf("  Disk Signature: %02x%02x%02x%02x\n",
+           mbr->disk_sig[3], mbr->disk_sig[2],
+           mbr->disk_sig[1], mbr->disk_sig[0]);
     printf("  MBR Signature:  0x%04X (%s)\n",
            MBR_SIGNATURE_VALUE, mbr->valid ? "OK" : "INVALID");
     printf("  Type:           %s\n",
