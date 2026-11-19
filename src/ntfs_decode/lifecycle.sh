@@ -22,7 +22,7 @@
 #          （「$LogFile の構造と解析」章の実測による）
 # ============================================================
 
-# ── 設定 ────────────────────────────────────────────────────
+# -- 設定 ----------------------------------------------------
 MFT_NUMBER=$1
 MFT_DECODE_CSV="undelete/drive_D_file_list.csv"
 TIMESTAMP_CSV="undelete/drive_D_file_timestamps.csv"
@@ -30,14 +30,14 @@ VERDICT_CSV="undelete/drive_D_file_verdict.csv"   # tm_judge の段階判定（m
 USNJOURNAL_CSV="usnjournal/D_usnjournal.bin_decoded.txt"
 LOGFILE_CSV="undelete/drive_D_logfile.bin_decoded.csv"
 
-# ── 引数チェック ─────────────────────────────────────────────
+# -- 引数チェック ---------------------------------------------
 if [ -z "$MFT_NUMBER" ]; then
     echo "使い方: $0 <MFT#>"
     echo "  例:   $0 7966"
     exit 1
 fi
 
-# ── ファイル存在チェック ──────────────────────────────────────
+# -- ファイル存在チェック --------------------------------------
 for f in "$MFT_DECODE_CSV" "$TIMESTAMP_CSV" "$USNJOURNAL_CSV" "$LOGFILE_CSV"; do
     if [ ! -f "$f" ]; then
         echo "警告: ファイルが見つかりません: $f"
@@ -48,7 +48,7 @@ echo "============================================================"
 echo " lifecycle.sh v05  MFT# $MFT_NUMBER"
 echo "============================================================"
 
-# ── ターゲットファイル名（mft_decode の最新エントリから取得）──
+# -- ターゲットファイル名（mft_decode の最新エントリから取得）--
 TARGET_FILENAME=$(awk -F',' -v mft="$MFT_NUMBER" '
     NR > 1 {
         split($1, a, ":")
@@ -57,7 +57,7 @@ TARGET_FILENAME=$(awk -F',' -v mft="$MFT_NUMBER" '
 ' "$MFT_DECODE_CSV")
 echo "  ターゲットファイル名: [$TARGET_FILENAME]"
 
-# ── SEQ_LIST 収集（USN + timestamps + mft_decode から全 seq を網羅）──
+# -- SEQ_LIST 収集（USN + timestamps + mft_decode から全 seq を網羅）--
 SEQ_LIST=$(printf "%s\n%s\n%s\n" \
     "$(awk -F',' -v mft="$MFT_NUMBER" '
         NR > 1 { split($1,a,":"); if (a[1]==mft) print a[2] }
@@ -132,9 +132,9 @@ TARGET_SEQ_COUNT=${#TARGET_SEQ_ARRAY[@]}
 # Section 1: Basic Info
 # ============================================================
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 echo "  Section 1: Basic Info (mft_decode.csv)"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 
 awk -F',' -v mft="$MFT_NUMBER" '
 NR == 1 { next }
@@ -150,7 +150,7 @@ NR == 1 { next }
         printf "  si_modified: %s\n",  $5
         printf "  si_accessed: %s\n",  $6
         printf "  si_created : %s\n",  $7
-        print  "  ──────────────────────────────────────────────────"
+        print  "  --------------------------------------------------"
     }
 }
 ' "$MFT_DECODE_CSV"
@@ -163,9 +163,9 @@ echo "  対象 seq [$TARGET_FILENAME] : $(echo $TARGET_SEQ_LIST | tr '\n' ' ')"
 # Section 2: Timestamps per seq（対象 seq のみ）
 # ============================================================
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 echo "  Section 2: Timestamps per seq (timestamps.csv)"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 
 for seq in $SEQ_LIST; do
     label=$(classify_seq $seq)
@@ -221,9 +221,9 @@ done
 # Section 3: USN History per seq（全 seq、別ファイルは簡略表示）
 # ============================================================
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 echo "  Section 3: USN History per seq (usnjournal.csv)"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 
 for seq in $SEQ_LIST; do
     label=$(classify_seq $seq)
@@ -262,7 +262,7 @@ for seq in $SEQ_LIST; do
         | awk -F',' '$6 ~ /FILE_DELETE/'  | tail -1 | awk -F',' '{print $5}')
 
     echo ""
-    echo "    ── サマリー ──────────────────────────────────────────"
+    echo "    -- サマリー ------------------------------------------"
     echo "    最初の FILE_CREATE : ${FIRST_CREATE:-(なし)}"
     if [ "$HAS_BIC" -gt 0 ]; then
         echo "    BASIC_INFO_CHANGE  : あり（コピー元タイムスタンプ書き戻し）"
@@ -281,9 +281,9 @@ done
 #        次の対象 seq の start は使わない（USN消滅 seq がある場合に誤る）
 # ============================================================
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 echo "  Section 4: Children (Parent_MFT# = $MFT_NUMBER)"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 
 CHILD_ALL=$(awk -F',' -v mft="$MFT_NUMBER" '$3 == mft' "$USNJOURNAL_CSV")
 CHILD_CREATE_ALL=$(echo "$CHILD_ALL" | awk -F',' '$6 ~ /FILE_CREATE/')
@@ -302,7 +302,7 @@ else
     echo "  FILE_CREATE ユニーク件数: $C_TOTAL"
     echo "  FILE_DELETE ユニーク件数: $D_TOTAL"
     echo ""
-    echo "  ── 対象 seq ごとの子ファイル操作 ─────────────────────────"
+    echo "  -- 対象 seq ごとの子ファイル操作 -------------------------"
 
     for seq in $TARGET_SEQ_ARRAY; do
         echo ""
@@ -374,9 +374,9 @@ fi
 # Section 5: $LogFile による確証
 # ============================================================
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 echo "  Section 5: LogFile verification (logfile.csv)"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 
 LOG_ENTRIES=$(awk -F',' -v mft="$MFT_NUMBER" 'NR > 1 && $7 == mft' "$LOGFILE_CSV")
 
@@ -384,19 +384,19 @@ if [ -z "$LOG_ENTRIES" ]; then
     echo "  ※ LogFile に記録なし（ローテーションで消滅した可能性）"
 else
     echo ""
-    echo "  ── ファイル作成（InitializeFileRecordSegment）──"
+    echo "  -- ファイル作成（InitializeFileRecordSegment）--"
     echo "$LOG_ENTRIES" \
         | awk -F',' '$5 == "InitializeFileRecordSegment" {
             printf "    LSN:%-15s  TransID=%-8s  %s\n", $1, $4, $10 }'
 
     echo ""
-    echo "  ── ファイル削除（DeallocateFileRecordSegment）──"
+    echo "  -- ファイル削除（DeallocateFileRecordSegment）--"
     echo "$LOG_ENTRIES" \
         | awk -F',' '$5 == "DeallocateFileRecordSegment" {
             printf "    LSN:%-15s  TransID=%-8s\n", $1, $4 }'
 
     echo ""
-    echo "  ── トランザクション完了（ForgetTransaction）──"
+    echo "  -- トランザクション完了（ForgetTransaction）--"
     # 実機の $LogFile では通常操作に CommitTransaction は出ず、完了は
     # ForgetTransaction で示される（「$LogFile の構造と解析」章の実測）
     for tid in $(echo "$LOG_ENTRIES" | awk -F',' '{print $4}' | sort -u); do
@@ -417,11 +417,11 @@ fi
 #         ②対象ファイルのみのサマリーテーブル
 # ============================================================
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 echo "  Section 6: Timeline Summary"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 echo ""
-echo "  ── MFT# $MFT_NUMBER の全再利用履歴 ────────────────────────"
+echo "  -- MFT# $MFT_NUMBER の全再利用履歴 ------------------------"
 echo ""
 
 INSTANCE_NUM=0
@@ -461,7 +461,7 @@ for seq in $SEQ_LIST; do
         INSTANCE_NUM=$((INSTANCE_NUM + 1))
         echo "  ★ 第${INSTANCE_NUM}回  seq=$seq  [$TARGET_FILENAME]"
     else
-        echo "  ─ 別ファイル  seq=$seq  [$fname]（MFT 再利用）"
+        echo "  - 別ファイル  seq=$seq  [$fname]（MFT 再利用）"
     fi
     echo "    作成時刻（Birth）  : ${BIRTH:-(不明)}"
     echo "    BASIC_INFO_CHANGE  : $BIC_MSG"
@@ -470,12 +470,12 @@ for seq in $SEQ_LIST; do
     echo ""
 done
 
-# ── 対象ファイルのみのサマリーテーブル ──
+# -- 対象ファイルのみのサマリーテーブル --
 echo ""
-echo "  ── [$TARGET_FILENAME] サマリーテーブル ──────────────────────"
+echo "  -- [$TARGET_FILENAME] サマリーテーブル ----------------------"
 printf "  %-5s  %-6s  %-30s  %-30s  %-4s\n" \
     "回" "seq" "作成時刻（Birth）" "削除時刻" "BIC"
-echo "  $(printf '─%.0s' {1..80})"
+echo "  $(printf '-%.0s' {1..80})"
 
 INSTANCE_NUM=0
 PREV_BIRTH=""
@@ -514,7 +514,7 @@ for seq in $SEQ_LIST; do
         "${DELETE_TIME:-(不明/USN消滅)}" \
         "$BIC_MSG"
 
-    # ── 注記の判定 ──────────────────────────────────────────
+    # -- 注記の判定 ------------------------------------------
 
     # 注記1: USN 記録なし（ローテーション消滅）
     if [ -z "$HAS_USN" ]; then
