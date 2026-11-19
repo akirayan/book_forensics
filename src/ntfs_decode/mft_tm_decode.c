@@ -552,15 +552,14 @@ int main(int argc, char *argv[]) {
 
     if (argc < 2) {
         fprintf(stderr,
-            "使い方: %s <デバイス> [出力CSV]\n"
-            "  例:  sudo %s /dev/loop0 timestamps.csv\n"
-            "       sudo %s /dev/loop0\n",
+            "使い方: %s <デバイス>\n"
+            "  例:  sudo %s /dev/loop0 | tm_judge\n"
+            "       sudo %s /dev/loop0 > timestamps.csv\n",
             argv[0], argv[0], argv[0]);
         return 1;
     }
 
     const char *device   = argv[1];
-    const char *csv_path = (argc >= 3) ? argv[2] : NULL;
 
     /* デバイスオープン */
     g_dev_fd = open(device, O_RDONLY);
@@ -619,16 +618,8 @@ int main(int argc, char *argv[]) {
     }
     apply_fixup(mft0_buf, g_mft_record_size);
 
-    /* CSV 出力先 */
+    /* CSV 出力先: 常に stdout（tm_judge にパイプ、またはファイル保存は > で） */
     FILE *out_fp = stdout;
-    if (csv_path) {
-        out_fp = fopen(csv_path, "w");
-        if (!out_fp) {
-            fprintf(stderr, "Error: '%s' を開けません: %s\n",
-                    csv_path, strerror(errno));
-            free(mft0_buf); close(g_dev_fd); return 1;
-        }
-    }
 
     /* CSV ヘッダ（デコードのみ。判定列は持たない） */
     fprintf(out_fp,
@@ -642,15 +633,12 @@ int main(int argc, char *argv[]) {
     uint64_t cnt_emitted = 0, cnt_total = 0;
     scan_mft(mft0_buf, out_fp, &cnt_emitted, &cnt_total);
 
-    if (out_fp != stdout) fclose(out_fp);
     free(mft0_buf);
     close(g_dev_fd);
 
     fprintf(stderr, "# ─────────────────────────────────\n");
     fprintf(stderr, "# MFT レコード総数  : %llu\n", (unsigned long long)cnt_total);
     fprintf(stderr, "# 出力レコード数    : %llu\n", (unsigned long long)cnt_emitted);
-    if (csv_path)
-        fprintf(stderr, "# 出力ファイル      : %s\n", csv_path);
 
     return 0;
 }
