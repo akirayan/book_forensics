@@ -827,15 +827,14 @@ int main(int argc, char *argv[]) {
 
     if (argc < 2) {
         fprintf(stderr,
-            "使い方: %s <デバイス> [出力CSV]\n"
-            "  例:  sudo %s /dev/loop0 output.csv\n"
-            "       sudo %s /dev/sda1\n",
+            "使い方: %s <デバイス>\n"
+            "  例:  sudo %s /dev/loop0\n"
+            "       sudo %s /dev/loop0 > mft.csv   # ファイルに保存は > で\n",
             argv[0], argv[0], argv[0]);
         return 1;
     }
 
     const char *device   = argv[1];
-    const char *csv_path = (argc >= 3) ? argv[2] : NULL;
 
     g_dev_fd = open(device, O_RDONLY);
     if (g_dev_fd < 0) {
@@ -901,16 +900,8 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "# ディレクトリエントリ: %llu\n",
             (unsigned long long)g_dir_count);
 
-    /* ── CSV 出力先 ── */
+    /* ── CSV 出力先: 常に stdout（ファイルへ保存するなら  > mft.csv  でリダイレクト） ── */
     FILE *csv_fp = stdout;
-    if (csv_path) {
-        csv_fp = fopen(csv_path, "w");
-        if (!csv_fp) {
-            fprintf(stderr, "Error: '%s' を開けません: %s\n",
-                    csv_path, strerror(errno));
-            free(mft0_buf); close(g_dev_fd); return 1;
-        }
-    }
 
     /* ヘッダ */
     fprintf(csv_fp,
@@ -922,7 +913,6 @@ int main(int argc, char *argv[]) {
     Pass2Data pd = { csv_fp, 0, 0, 0 };
     scan_mft(mft0_buf, pass2_cb, &pd, NULL);
 
-    if (csv_fp != stdout) fclose(csv_fp);
     free(mft0_buf);
     free(g_dir_table);
     free(g_mft_index);
@@ -932,8 +922,6 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "# 処理済みレコード: %llu\n",  (unsigned long long)pd.total);
     fprintf(stderr, "# IN_USE          : %llu\n",  (unsigned long long)pd.in_use);
     fprintf(stderr, "# DELETED         : %llu\n",  (unsigned long long)pd.deleted);
-    if (csv_path)
-        fprintf(stderr, "# 出力ファイル    : %s\n", csv_path);
 
     return 0;
 }
