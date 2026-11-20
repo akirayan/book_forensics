@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# lifecycle.sh v05
+# lifecycle.sh v06
 #
 # 指定した MFT# のファイル/フォルダのライフサイクルを調査する
 #
@@ -20,6 +20,12 @@
 #          ForgetTransaction に修正。実機の $LogFile では通常のファイル操作に
 #          CommitTransaction は現れず、完了は ForgetTransaction で示されるため
 #          （「$LogFile の構造と解析」章の実測による）
+#   [Fix7] 「解放で +1」された見かけの seq を世代から除外。NTFS の seq は
+#          レコードが解放（削除）された時点で +1 されるため、削除済みレコードを
+#          読むと seq は生前の世代より 1 大きく見える（生前 USN=seq1 / 削除後の
+#          mft_decode=seq2）。この seq2 は「seq1 の世代を削除した結果」であって
+#          新しい世代ではないので、幻の世代として SEQ_LIST から落とす
+#          （DELETED・USN 記録なし・直前 seq に USN 世代あり、で判定）
 # ============================================================
 
 # -- 設定 ----------------------------------------------------
@@ -69,6 +75,25 @@ SEQ_LIST=$(printf "%s\n%s\n%s\n" \
         $1 == mft { print $2 }
     ' "$USNJOURNAL_CSV")" \
     | grep -v '^$' | sort -n | uniq)
+
+# [Fix7] 「解放で +1」された見かけの seq を世代から除外する。
+#   USN に記録が無く、mft_decode で DELETED、かつ直前 seq (seq-1) に USN 世代が
+#   あるものは、その世代を削除した結果（seq が +1 されただけ）で新しい世代ではない。
+SEQ_LIST=$(for s in $SEQ_LIST; do
+    has_usn=$(awk -F',' -v m="$MFT_NUMBER" -v q="$s" \
+        '$1==m && $2==q { print "y"; exit }' "$USNJOURNAL_CSV")
+    if [ -z "$has_usn" ]; then
+        st=$(awk -F',' -v m="$MFT_NUMBER" -v q="$s" \
+            'NR>1 { split($1,a,":"); if (a[1]==m && a[2]==q) { print $3; exit } }' \
+            "$MFT_DECODE_CSV")
+        if [ "$st" = "DELETED" ]; then
+            pv=$(awk -F',' -v m="$MFT_NUMBER" -v q="$((s-1))" \
+                '$1==m && $2==q { print "y"; exit }' "$USNJOURNAL_CSV")
+            [ -n "$pv" ] && continue
+        fi
+    fi
+    echo "$s"
+done)
 
 SEQ_COUNT=$(echo "$SEQ_LIST" | grep -c .)
 
