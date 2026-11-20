@@ -480,10 +480,14 @@ static int dump_runlist(const uint8_t *rec_buf, const char *filter_name,
         printf("---  ----  --------  ----------  --------  ----------\n");
 
         uint64_t total_bytes = total_clus * g_bytes_per_clus;
-        const char *match =
-            (anr->data_size <= total_bytes &&
-             anr->data_size >  total_bytes - g_bytes_per_clus)
-            ? " → data_size と一致" : "";
+        char match[80];
+        if (anr->data_size <= total_bytes &&
+            anr->data_size >  total_bytes - g_bytes_per_clus)
+            snprintf(match, sizeof match,
+                     " → data_size %llu B を格納（割り当て内）",
+                     (unsigned long long)anr->data_size);
+        else
+            match[0] = '\0';
         printf("合計: %d ラン, %llu クラスタ, %llu bytes%s\n",
                nr, (unsigned long long)total_clus,
                (unsigned long long)total_bytes, match);
