@@ -19,7 +19,7 @@
  *       → 指定 ADS を hex ダンプ付きで表示
  *
  * コンパイル:
- *   cc -O2 -Wall -o mft_ads_dump mft_ads_dump.c            # Linux（cc は gcc へのリンク）
+ *   cc -O2 -Wall -o mft_ads_dump mft_ads_dump.c            # Linux
  *   cc -O2 -Wall -o mft_ads_dump mft_ads_dump.c -liconv    # macOS（iconv を明示リンク）
  *
  * 例:
@@ -218,6 +218,7 @@ static int parse_runlist(const uint8_t *rl, size_t max_len,
 
         int lbytes = hdr & 0x0F;
         int obytes = (hdr >> 4) & 0x0F;
+        if (lbytes == 0 || lbytes > 8 || obytes > 8) break;  /* 不正ニブル(>8/0)でのシフト未定義動作を防ぐ */
         if (pos + (size_t)(lbytes + obytes) > max_len) break;
 
         uint64_t rlen = 0;

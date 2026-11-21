@@ -278,6 +278,7 @@ static int parse_runlist(const uint8_t *rl, size_t max_len,
 
         int lbytes = hdr & 0x0F;
         int obytes = (hdr >> 4) & 0x0F;
+        if (lbytes == 0 || lbytes > 8 || obytes > 8) break;  /* 不正ニブル(>8/0)でのシフト未定義動作を防ぐ */
         if (pos + lbytes + obytes > max_len) break;
 
         uint64_t rlen = 0;
