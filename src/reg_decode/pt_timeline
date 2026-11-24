@@ -1,0 +1,540 @@
+#!/usr/bin/env python3
+# =============================================================================
+#  pt_timeline  —  Microsoft-Windows-Partition/Diagnostic Event ID 1006
+#                      PartitionTable Binary Timeline Analyzer
+#
+#  Usage:
+#    python3 pt_timeline <evtx_decoded.txt> [--disk <DiskNumber>] [--csv]
+#
+#  Input format (evtx_decode output):
+#    ##-------- <timestamp>  record_id=N  event_id=1006 --------
+#    Event.EventData.Data.DiskNumber: N
+#    Event.EventData.Data.PartitionCount: N
+#    Event.EventData.Data.PartitionTable: <hex>
+#    ...
+#
+#  PartitionTable binary format (same as PTCache registry value):
+#    Header 48 bytes:
+#      +0x00 version      uint32  (1 = GPT)
+#      +0x04 part_count   uint32
+#      +0x08 disk_guid    16 bytes (mixed-endian)
+#      +0x18 unknown      24 bytes
+#    Entry 144 bytes each:
+#      +0x00 part_number  uint32
+#      +0x04 unk_flag     uint32
+#      +0x08 start_bytes  uint64  (byte offset)
+#      +0x10 length_bytes uint64  (byte size)
+#      +0x18 attributes   uint64
+#      +0x20 type_guid    16 bytes (mixed-endian)
+#      +0x30 uniq_guid    16 bytes (mixed-endian)
+#      +0x40 padding      8 bytes
+#      +0x48 name         72 bytes (UTF-16LE)
+#
+#  Author: generated for PC2 investigation — KIOXIA KBG5AZNT512G
+#  Version: 1.0  2026-01-22
+#  Version: 1.1  2026-03-14
+#            - Add DiskGUID line to disk header (from first valid PT record)
+#            - Add DiskGUID line to each record block
+#            - Detect [DISK GUID CHANGED] in diff_layouts() — repartition evidence
+#            - Add DiskGUID column to CSV output
+#  Version: 1.2  2026-03-14
+#            - Fix: [DISK GUID CHANGED] now also fires on DISK APPEARED after offline
+#              (prev_pt=None case: compare against last_known_disk_guid)
+#            - Fix: DiskGUID on offline records shows last known guid instead of "?"
+#  Version: 1.3  2026-03-14
+#            - stdin support: file argument is now optional
+#              pt_timeline [file]  — read from file as before
+#              pt_timeline         — read from stdin (pipe from evtx_decode)
+# =============================================================================
+
+import sys
+import re
+import struct
+import argparse
+from collections import defaultdict
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+HEADER_SIZE = 48
+ENTRY_SIZE  = 144
+BYTES_PER_SECTOR = 512
+
+GPT_TYPE_NAMES = {
+    "c12a7328-f81f-11d2-ba4b-00a0c93ec93b": "EFI System Partition",
+    "e3c9e316-0b5c-4db8-817d-f92df00215ae": "Microsoft Reserved",
+    "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7": "Basic Data (NTFS)",
+    "de94bba4-06d1-4d40-a16a-bfd50179d6ac": "Windows RE",
+    "af3dc60f-8384-7247-8e79-3d69d8477de4": "Linux Filesystem",
+    "0657fd6d-a4ab-43c4-84e5-0933c84b4f4f": "Linux Swap",
+}
+
+# ---------------------------------------------------------------------------
+# GUID helpers (mixed-endian, same as PTCache / print_guid() in C tool)
+# ---------------------------------------------------------------------------
+def guid_mixed(b):
+    """Parse 16-byte mixed-endian GUID to standard string."""
+    if len(b) < 16:
+        return "00000000-0000-0000-0000-000000000000"
+    return (f"{b[3]:02x}{b[2]:02x}{b[1]:02x}{b[0]:02x}-"
+            f"{b[5]:02x}{b[4]:02x}-"
+            f"{b[7]:02x}{b[6]:02x}-"
+            f"{b[8]:02x}{b[9]:02x}-"
+            f"{b[10]:02x}{b[11]:02x}{b[12]:02x}{b[13]:02x}{b[14]:02x}{b[15]:02x}")
+
+def type_name(guid_str):
+    return GPT_TYPE_NAMES.get(guid_str.lower(), "Unknown")
+
+# ---------------------------------------------------------------------------
+# Parse one PartitionTable hex blob
+# ---------------------------------------------------------------------------
+def parse_pt_hex(hex_str):
+    """
+    Returns dict with:
+      version, part_count, disk_guid, entries[]
+    Each entry: part_number, start_lba, end_lba, size_gb, type_guid,
+                uniq_guid, type_name, name, attributes
+    Returns None if hex is empty/invalid.
+    """
+    if not hex_str or hex_str.strip().lower() in ("", "[empty]"):
+        return None
+    try:
+        data = bytes.fromhex(hex_str.strip())
+    except ValueError:
+        return None
+    if len(data) < HEADER_SIZE:
+        return None
+
+    version    = struct.unpack_from('<I', data, 0)[0]
+    part_count = struct.unpack_from('<I', data, 4)[0]
+    disk_guid  = guid_mixed(data[8:24])
+
+    entries = []
+    for i in range(part_count):
+        off = HEADER_SIZE + i * ENTRY_SIZE
+        if off + ENTRY_SIZE > len(data):
+            break
+        e = data[off:off+ENTRY_SIZE]
+
+        part_num  = struct.unpack_from('<I', e, 0x00)[0]
+        unk_flag  = struct.unpack_from('<I', e, 0x04)[0]
+        start_b   = struct.unpack_from('<Q', e, 0x08)[0]
+        length_b  = struct.unpack_from('<Q', e, 0x10)[0]
+        attr      = struct.unpack_from('<Q', e, 0x18)[0]
+        tguid     = guid_mixed(e[0x20:0x30])
+        uguid     = guid_mixed(e[0x30:0x40])
+        try:
+            name = e[0x48:0x48+72].decode('utf-16-le').rstrip('\x00')
+        except Exception:
+            name = "(decode error)"
+
+        start_lba = start_b // BYTES_PER_SECTOR
+        end_lba   = (start_b + length_b) // BYTES_PER_SECTOR - 1 if length_b else 0
+        size_gb   = length_b / (1024 ** 3)
+
+        entries.append({
+            "part_number": part_num,
+            "unk_flag":    unk_flag,
+            "start_lba":   start_lba,
+            "end_lba":     end_lba,
+            "start_bytes": start_b,
+            "length_bytes":length_b,
+            "size_gb":     size_gb,
+            "attributes":  attr,
+            "type_guid":   tguid,
+            "uniq_guid":   uguid,
+            "type_name":   type_name(tguid),
+            "name":        name,
+        })
+
+    return {
+        "version":    version,
+        "part_count": part_count,
+        "disk_guid":  disk_guid,
+        "entries":    entries,
+    }
+
+# ---------------------------------------------------------------------------
+# Parse the evtx_decode text file
+# ---------------------------------------------------------------------------
+def parse_file(path):
+    """
+    Returns list of event dicts, each with:
+      record_id, timestamp, disk_number, disk_model, disk_serial,
+      disk_manufacturer, capacity_bytes, bus_type, part_count,
+      partition_style, offline_reason, pt_hex, pt (parsed)
+    """
+    events = []
+    current = {}
+
+    RE_HEADER  = re.compile(r'^##-------- (\S+)\s+record_id=(\d+)\s+event_id=1006')
+    RE_KV      = re.compile(r'^Event\.EventData\.Data\.(\w+):\s*(.*)')
+    RE_SYS_TS  = re.compile(r'^Event\.System\.TimeCreated\.SystemTime:\s*(\S+)')
+    RE_DISKNUM = re.compile(r'^Event\.EventData\.Data\.DiskNumber:\s*(\d+)')
+
+    def flush(ev):
+        if ev.get("record_id"):
+            ev["pt"] = parse_pt_hex(ev.get("pt_hex", ""))
+            events.append(ev)
+
+    with (sys.stdin if path == "-" else
+          open(path, encoding="utf-8", errors="replace")) as f:
+        for line in f:
+            line = line.rstrip()
+            m = RE_HEADER.match(line)
+            if m:
+                flush(current)
+                current = {
+                    "timestamp": m.group(1),
+                    "record_id": int(m.group(2)),
+                }
+                continue
+
+            m = RE_SYS_TS.match(line)
+            if m:
+                current["timestamp"] = m.group(1)
+                continue
+
+            m = RE_KV.match(line)
+            if m:
+                key, val = m.group(1), m.group(2).strip()
+                mapping = {
+                    "DiskNumber":     "disk_number",
+                    "DiskId":         "disk_id",
+                    "Model":          "disk_model",
+                    "SerialNumber":   "disk_serial",
+                    "Manufacturer":   "disk_manufacturer",
+                    "Capacity":       "capacity_bytes",
+                    "BusType":        "bus_type",
+                    "PartitionCount": "part_count",
+                    "PartitionStyle": "partition_style",
+                    "OfflineReason":  "offline_reason",
+                    "PartitionTable": "pt_hex",
+                }
+                if key in mapping:
+                    current[mapping[key]] = val
+                continue
+
+    flush(current)
+    return events
+
+# ---------------------------------------------------------------------------
+# Detect layout changes between consecutive records for same disk
+# ---------------------------------------------------------------------------
+def diff_layouts(prev_pt, curr_pt):
+    """
+    Compare two parsed PT dicts.
+    Returns list of change strings.
+    """
+    if prev_pt is None and curr_pt is None:
+        return []
+    if prev_pt is None:
+        return ["[DISK APPEARED]"]
+    if curr_pt is None:
+        return ["[DISK DISAPPEARED / offline]"]
+
+    changes = []
+
+    # Disk GUID change — repartition / GPT rebuild evidence
+    if prev_pt["disk_guid"] != curr_pt["disk_guid"]:
+        changes.append(
+            f"[DISK GUID CHANGED]\n"
+            f"  Before: {prev_pt['disk_guid']}\n"
+            f"  After : {curr_pt['disk_guid']}"
+        )
+
+    prev_guids = {e["uniq_guid"]: e for e in prev_pt["entries"]}
+    curr_guids = {e["uniq_guid"]: e for e in curr_pt["entries"]}
+
+    # Partition count change
+    pc_prev = prev_pt["part_count"]
+    pc_curr = curr_pt["part_count"]
+    if pc_prev != pc_curr:
+        changes.append(f"PartitionCount: {pc_prev} → {pc_curr}")
+
+    # New partitions
+    for g, e in curr_guids.items():
+        if g not in prev_guids:
+            changes.append(
+                f"  [NEW]     '{e['name']}'  ({e['type_name']})\n"
+                f"            UniqueGUID = {g}\n"
+                f"            LBA {e['start_lba']:,} - {e['end_lba']:,}  ({e['size_gb']:.2f} GB)"
+            )
+
+    # Deleted partitions
+    for g, e in prev_guids.items():
+        if g not in curr_guids:
+            changes.append(
+                f"  [DELETED] '{e['name']}'  ({e['type_name']})\n"
+                f"            UniqueGUID = {g}\n"
+                f"            LBA {e['start_lba']:,} - {e['end_lba']:,}  ({e['size_gb']:.2f} GB)"
+            )
+
+    # Resized partitions (same GUID, different LBA range)
+    for g in set(prev_guids) & set(curr_guids):
+        pe = prev_guids[g]
+        ce = curr_guids[g]
+        if pe["start_lba"] != ce["start_lba"] or pe["end_lba"] != ce["end_lba"]:
+            changes.append(
+                f"  [RESIZED] '{ce['name']}'  ({ce['type_name']})\n"
+                f"            UniqueGUID = {g}\n"
+                f"            {pe['size_gb']:.2f} GB → {ce['size_gb']:.2f} GB "
+                f"(LBA end: {pe['end_lba']:,} → {ce['end_lba']:,})"
+            )
+
+    return changes
+
+# ---------------------------------------------------------------------------
+# Render helpers
+# ---------------------------------------------------------------------------
+def bar(size_gb, total_gb=512.0, width=40):
+    if total_gb <= 0:
+        total_gb = max(size_gb, 1.0)  # Capacity=0 の場合はパーティションサイズを基準にする
+    filled = max(1, int(round(size_gb / total_gb * width)))
+    filled = min(filled, width)       # 念のため上限も
+    return "█" * filled + "░" * (width - filled)
+
+BUS_TYPES = {
+    "1": "SCSI", "2": "ATAPI", "3": "ATA", "4": "1394",
+    "5": "SSA",  "6": "FC",    "7": "USB", "8": "RAID",
+    "9": "iSCSI","10":"SAS",   "11":"SATA","12":"SD",
+    "13":"MMC",  "14":"Virtual","15":"FileBackedVirtual",
+    "16":"Spaces","17":"NVMe", "18":"SCM", "19":"UFS",
+}
+
+def bus_type_str(val):
+    return BUS_TYPES.get(str(val), f"BusType={val}")
+
+def capacity_str(cap_str):
+    try:
+        b = int(cap_str)
+        return f"{b / (1024**3):.0f} GB ({b:,} bytes)"
+    except Exception:
+        return cap_str
+
+# ---------------------------------------------------------------------------
+# Main output: timeline
+# ---------------------------------------------------------------------------
+def print_timeline(events, filter_disk=None, csv_mode=False):
+    # Group by disk
+    by_disk = defaultdict(list)
+    for ev in events:
+        # Group by DiskId (unique per physical disk) if available, else DiskNumber+Model
+        did = ev.get("disk_id", "").strip("{}")
+        dn  = ev.get("disk_number", "?")
+        mod = ev.get("disk_model", "")
+        key = did if did and did != "00000000-0000-0000-0000-000000000000" else f"{dn}_{mod}"
+        by_disk[key].append(ev)
+
+    if csv_mode:
+        # CSV output: one row per partition per event
+        print("RecordID,Timestamp,DiskNumber,DiskModel,DiskSerial,DiskGUID,"
+              "PartitionCount,EntryIndex,PartNumber,TypeName,Name,"
+              "StartLBA,EndLBA,SizeGB,TypeGUID,UniqueGUID,Change")
+        # (implemented below inside loop)
+
+    for disk_key in sorted(by_disk.keys(), key=lambda k: by_disk[k][0]["timestamp"]):
+        disk_events = by_disk[disk_key]
+        first = disk_events[0]
+        disk_num = first.get("disk_number", "?")
+        disk_did = first.get("disk_id", "").strip("{}")
+
+        if filter_disk is not None and str(disk_num) != str(filter_disk):
+            continue
+
+        if not csv_mode:
+            cap = capacity_str(first.get("capacity_bytes", "0"))
+            bus = bus_type_str(first.get("bus_type", "?"))
+            # DiskGUID from first record that has a parsed PT
+            first_dguid = next(
+                (ev["pt"]["disk_guid"] for ev in disk_events if ev.get("pt")),
+                "?"
+            )
+            print(f"\n{'='*72}")
+            print(f"  DISK {disk_num}: {first.get('disk_model','?')}")
+            if disk_did:
+                print(f"  DiskId  : {disk_did}")
+            print(f"  DiskGUID: {first_dguid}")
+            print(f"  Serial  : {first.get('disk_serial','?')}")
+            print(f"  Capacity: {cap}")
+            print(f"  Bus     : {bus}")
+            print(f"  Records : {len(disk_events)}  "
+                  f"({disk_events[0]['timestamp'][:10]} 〜 "
+                  f"{disk_events[-1]['timestamp'][:10]})")
+            print(f"{'='*72}")
+
+        prev_pt = None
+        last_known_disk_guid = None   # last valid disk_guid seen (survives offline records)
+        for ev in disk_events:
+            rec_id  = ev.get("record_id", "?")
+            ts      = ev.get("timestamp", "?")
+            pc      = ev.get("part_count", "0")
+            pt      = ev.get("pt")
+            model   = ev.get("disk_model", "?")
+            serial  = ev.get("disk_serial", "?")
+
+            changes = diff_layouts(prev_pt, pt)
+
+            # If disk reappeared (prev_pt was None due to offline) and DiskGUID changed,
+            # inject [DISK GUID CHANGED] immediately after [DISK APPEARED]
+            curr_disk_guid = pt["disk_guid"] if pt else None
+            if (curr_disk_guid and last_known_disk_guid
+                    and curr_disk_guid != last_known_disk_guid
+                    and "[DISK APPEARED]" in " ".join(changes)):
+                changes.insert(1,
+                    f"[DISK GUID CHANGED]\n"
+                    f"  Before: {last_known_disk_guid}\n"
+                    f"  After : {curr_disk_guid}"
+                )
+
+            if curr_disk_guid:
+                last_known_disk_guid = curr_disk_guid
+
+            if csv_mode:
+                entries = pt["entries"] if pt else []
+                dguid = pt["disk_guid"] if pt else ""
+                if not entries:
+                    chg_str = "; ".join(c.replace("\n", " ") for c in changes)
+                    print(f'{rec_id},{ts},{disk_num},"{model}","{serial}",{dguid},'
+                          f'{pc},,,,,,,,,, "{chg_str}"')
+                else:
+                    for idx, e in enumerate(entries, 1):
+                        chg_str = "; ".join(c.replace("\n", " ") for c in changes) if idx == 1 else ""
+                        print(f'{rec_id},{ts},{disk_num},"{model}","{serial}",{dguid},'
+                              f'{pc},{idx},{e["part_number"]},"{e["type_name"]}",'
+                              f'"{e["name"]}",{e["start_lba"]},{e["end_lba"]},'
+                              f'{e["size_gb"]:.3f},{e["type_guid"]},{e["uniq_guid"]},'
+                              f'"{chg_str}"')
+                prev_pt = pt
+                continue
+
+            # ── Text output ──
+            has_change = len(changes) > 0
+            marker = " ◀◀◀ CHANGE" if has_change else ""
+            dguid = pt["disk_guid"] if pt else (last_known_disk_guid or "?")
+            dguid_marker = " ◀◀◀ CHANGED" if any("[DISK GUID CHANGED]" in c for c in changes) else ""
+            print(f"\n  ┌─ Rec#{rec_id:<4} {ts}  PartCount={pc}{marker}")
+            print(f"  │  DiskGUID: {dguid}{dguid_marker}")
+
+            if pt and pt["entries"]:
+                cap_raw = int(ev.get("capacity_bytes", 0) or 0)
+                total_cap = cap_raw / (1024**3) if cap_raw > 0 else 0
+                for e in pt["entries"]:
+                    tname = e["type_name"][:22]
+                    b = bar(e["size_gb"], total_cap)
+                    is_new = any(e["uniq_guid"] in c for c in changes if "[NEW]" in c)
+                    is_del = False
+                    flag = " ◀NEW" if is_new else ""
+                    is_resized = any(e["uniq_guid"] in c for c in changes if "[RESIZED]" in c)
+                    flag = " ◀RESIZED" if is_resized else flag
+                    print(f"  │  [{tname:<22}] {e['size_gb']:>7.2f} GB  "
+                          f"LBA {e['start_lba']:>11,}-{e['end_lba']:>11,}{flag}")
+                    print(f"  │   {b}  GUID:{e['uniq_guid']}")
+            elif pt and pt["part_count"] == 0:
+                print(f"  │  [Disk offline / PartitionTable empty]")
+            else:
+                print(f"  │  [No partition data]")
+
+            if changes:
+                print(f"  │")
+                print(f"  │  ▼ 変化:")
+                for ch in changes:
+                    for line in ch.split("\n"):
+                        print(f"  │    {line}")
+
+            print(f"  └─────────────────────────────────────────────────────")
+
+            prev_pt = pt
+
+# ---------------------------------------------------------------------------
+# Forensic summary: highlight all layout-change events
+# ---------------------------------------------------------------------------
+def print_forensic_summary(events, filter_disk=None):
+    by_disk = defaultdict(list)
+    for ev in events:
+        did = ev.get("disk_id", "").strip("{}")
+        dn  = ev.get("disk_number", "?")
+        mod = ev.get("disk_model", "")
+        key = did if did and did != "00000000-0000-0000-0000-000000000000" else f"{dn}_{mod}"
+        by_disk[key].append(ev)
+
+    print("\n" + "╔" + "═"*68 + "╗")
+    print("║  FORENSIC SUMMARY — PartitionTable Layout Changes            ║")
+    print("╚" + "═"*68 + "╝")
+
+    for disk_key in sorted(by_disk.keys(), key=lambda k: by_disk[k][0]["timestamp"]):
+        disk_events = by_disk[disk_key]
+        first = disk_events[0]
+        disk_num = first.get("disk_number", "?")
+        disk_did = first.get("disk_id", "").strip("{}")
+
+        if filter_disk is not None and str(disk_num) != str(filter_disk):
+            continue
+
+        id_str = f"DiskId:{disk_did}" if disk_did else first.get("disk_serial","?")
+        print(f"\n  DISK {disk_num}: {first.get('disk_model','?')} [{id_str}]")
+        print(f"  {'─'*64}")
+
+        prev_pt = None
+        last_known_disk_guid = None
+        change_count = 0
+        for ev in disk_events:
+            pt = ev.get("pt")
+            changes = diff_layouts(prev_pt, pt)
+
+            curr_disk_guid = pt["disk_guid"] if pt else None
+            if (curr_disk_guid and last_known_disk_guid
+                    and curr_disk_guid != last_known_disk_guid
+                    and "[DISK APPEARED]" in " ".join(changes)):
+                changes.insert(1,
+                    f"[DISK GUID CHANGED]\n"
+                    f"  Before: {last_known_disk_guid}\n"
+                    f"  After : {curr_disk_guid}"
+                )
+            if curr_disk_guid:
+                last_known_disk_guid = curr_disk_guid
+
+            if changes:
+                change_count += 1
+                ts  = ev.get("timestamp","?")
+                rec = ev.get("record_id","?")
+                pc  = ev.get("part_count","?")
+                print(f"\n  ★ Rec#{rec}  {ts}  PartCount={pc}")
+                for ch in changes:
+                    for line in ch.split("\n"):
+                        print(f"      {line}")
+            prev_pt = pt
+
+        if change_count == 0:
+            print("    (変化なし — 全レコードで同一レイアウト)")
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+def main():
+    ap = argparse.ArgumentParser(
+        description="Partition/Diagnostic Event 1006 — PartitionTable Timeline Analyzer"
+    )
+    ap.add_argument("file", nargs="?", default="-",
+                    help="evtx_decode output text file (default: stdin)")
+    ap.add_argument("--disk", "-d", help="Filter by DiskNumber (default: all disks)")
+    ap.add_argument("--csv",  "-c", action="store_true", help="CSV output mode")
+    ap.add_argument("--summary", "-s", action="store_true",
+                    help="Show forensic summary only (layout-change events)")
+    args = ap.parse_args()
+
+    events = parse_file(args.file)
+
+    if not events:
+        print("[ERROR] No Event ID 1006 records found.", file=sys.stderr)
+        sys.exit(1)
+
+    if args.summary:
+        print_forensic_summary(events, filter_disk=args.disk)
+    else:
+        print_timeline(events, filter_disk=args.disk, csv_mode=args.csv)
+        print_forensic_summary(events, filter_disk=args.disk)
+
+
+if __name__ == "__main__":
+    main()

@@ -30,3 +30,7 @@ src/md_super
 # reg_decode 2nd-layer tools (build artifacts)
 src/reg_decode/reg_ptcache
 src/reg_decode/*.o
+
+# Python
+__pycache__/
+*.pyc
