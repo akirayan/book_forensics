@@ -27,11 +27,13 @@
  *   analysis: "no event" means EITHER "nothing happened" OR "auditing was
  *   off", and only PolAdtEv tells the two apart.
  *
- * Usage:
+ * Usage (prefer -f -p: it emits just this value, two lines):
  *   regf_decode -f -p "/ROOT/Policy/PolAdtEv" SECURITY | reg_poladtev
- *   regf_decode -d "*PolAdtEv/(default)"      SECURITY | reg_poladtev
  *   reg_poladtev --en  < poladtev.hex     (English subcategory names)
  *   reg_poladtev --csv < poladtev.hex
+ *   # regf_decode -d "*PolAdtEv/(default)" also feeds this tool, but -d only
+ *   # selects which value to DUMP in full hex -- it is NOT a filter, so it
+ *   # still prints the entire hive tree. -f -p is cleaner for a single value.
  *
  *   Options:
  *     -e | --en     show English subcategory names (match `auditpol /get`)
@@ -40,7 +42,9 @@
  *
  * Expected Input (auto-detected):
  *   (1) regf_decode pipe:  .../Policy/PolAdtEv/(default)|REG_NONE|00 01 00 00 ...
- *       NOTE: use -f or -d so the value is NOT truncated ("...[152 bytes]").
+ *       NOTE: the plain tree output truncates long values ("...[152 bytes]").
+ *       Use -f -p to emit just this value in full. -d also emits full hex, but
+ *       -d selects the dump target (not a filter) so it prints the whole tree.
  *   (2) regedit.exe hex:   "(default)"=hex:00,01,00,00,09,00,...,\
  *                            04,00
  *   (3) raw hex stream:    00 01 00 00 ...
@@ -279,8 +283,8 @@ static void usage(const char *prog)
         "Usage: %s [--en] [--csv]\n"
         "  Decode HKLM\\SECURITY\\Policy\\PolAdtEv (audit policy blob).\n"
         "    regf_decode -f -p \"/ROOT/Policy/PolAdtEv\" SECURITY | %s\n"
-        "    regf_decode -d \"*PolAdtEv/(default)\"      SECURITY | %s --en\n",
-        prog, prog, prog);
+        "  (-d \"*PolAdtEv/(default)\" also works but prints the whole tree.)\n",
+        prog, prog);
 }
 
 int main(int argc, char **argv)

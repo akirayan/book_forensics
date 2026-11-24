@@ -64,18 +64,24 @@ evtx_decode -t -e 1006 Microsoft-Windows-Partition%4Diagnostic.evtx > evtx1006.t
 ## reg_poladtev の使い方
 
 `regf_decode` で `SECURITY` ハイブの PolAdtEv 値をフル hex で出し、パイプで渡す。
+単一の値なので `-f -p`(その値だけを 2 行で出す)を使うのが素直。
 
 ```sh
 regf_decode -f -p "/ROOT/Policy/PolAdtEv" SECURITY | reg_poladtev        # 日本語名
-regf_decode -d "*PolAdtEv/(default)"      SECURITY | reg_poladtev --en    # 英語名(auditpol と同じ語彙)
-regf_decode -f -p "/ROOT/Policy/PolAdtEv" SECURITY | reg_poladtev --csv   # CSV
+regf_decode -f -p "/ROOT/Policy/PolAdtEv" SECURITY | reg_poladtev --en   # 英語名(auditpol と同じ語彙)
+regf_decode -f -p "/ROOT/Policy/PolAdtEv" SECURITY | reg_poladtev --csv  # CSV
 ```
 
 `--en` は `auditpol /get /category:*` と同じ英語サブカテゴリ名で出力する
 (ただし **PolAdtEv のバイト順**で並ぶ。auditpol の表示順とは異なる)。入力は
 `regf_decode` のパイプ(`…|REG_NONE|…`) / regedit の `.reg`(`"…"=hex:`) /
-生の hex 列に対応。値が `…[NN bytes]` と切り詰められている場合は検出して
-エラーにするので、`regf_decode` には `-f` か `-d` を付けてフル値を渡すこと。
+生の hex 列に対応。
+
+> `regf_decode -d "*PolAdtEv/(default)"` でも渡せる(`reg_poladtev` は `hex:`
+> ブロックを拾うので結果は同じ)。ただし `-d` は「どの値をフル hex で**ダンプ**
+> するか」を指定するもので**フィルタではない**ため、ハイブのツリー全体も一緒に
+> 出力される。単一の値には `-f -p` のほうがきれい。なお切り詰められた入力
+> (`…[NN bytes]`)は検出してエラーにするので、`-f`(または `-d`)でフル値を渡すこと。
 
 > 構造はフォーマット仕様書ではなく、実ハイブのバイト列から起こし、
 > kazamiya 氏「PolAdtEv_Structure」(rev5) と `auditpol /list /category /v`・
