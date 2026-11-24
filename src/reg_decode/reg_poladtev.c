@@ -12,6 +12,8 @@
  *                           `auditpol /list /category /v` on Win11 ja/en.
  *                           Added the 12th Logon/Logoff subcategory
  *                           "Access Rights" (24H2+). --en flag.
+ *  version 0.3  2026-11-24  Print usage and exit when stdin is a terminal or
+ *                           empty, instead of blocking on an interactive read.
  *  (c) Akira Endo (yan.akira@gmail.com)
  *
  *
@@ -89,6 +91,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>   /* isatty */
 
 /* ------------------------------------------------------------------ */
 /* Canonical tables (Windows 11). Subcategories are in PolAdtEv BYTE   */
@@ -297,9 +300,23 @@ int main(int argc, char **argv)
         else { fprintf(stderr, "%s: unknown option: %s\n", prog, argv[i]); usage(prog); return 2; }
     }
 
+    /* No pipe/redirect: stdin is the terminal. Don't block waiting for a
+     * value that will never come -- show how to use the tool and exit. */
+    if (isatty(fileno(stdin))) {
+        fprintf(stderr, "%s: no input on stdin.\n", prog);
+        usage(prog);
+        return 2;
+    }
+
     size_t raw_len = 0;
     char *raw = slurp_stdin(&raw_len);
     if (!raw) { fprintf(stderr, "%s: out of memory\n", prog); return 1; }
+    if (raw_len == 0) {
+        fprintf(stderr, "%s: empty input.\n", prog);
+        usage(prog);
+        free(raw);
+        return 2;
+    }
 
     const char *start;
     const char *h = strstr(raw, "hex:");
