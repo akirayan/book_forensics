@@ -12,7 +12,7 @@
 CC      := gcc
 CFLAGS  := -Wall -Wextra -O2 -std=c11
 
-TOOLS   := reg_ptcache
+TOOLS   := reg_ptcache reg_poladtev
 
 .PHONY: all clean
 all: $(TOOLS)

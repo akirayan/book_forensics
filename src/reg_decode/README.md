@@ -17,6 +17,7 @@ Windows レジストリ解析の**2層目**のツール置き場。
 |---|---|---|
 | `reg_ptcache` | C | `PartitionTableCache`(partmgr) / Event 1006 の `PartitionTable` — 過去に接続した GPT/MBR ディスクの Disk GUID・パーティション GUID・LBA・名前 |
 | `pt_timeline` | Python | `evtx_decode -t -e 1006` の出力から、ディスクごとのパーティションテーブル変化(接続/切断/追加/削除/リサイズ)を時系列で可視化 |
+| `reg_poladtev` | C | `SECURITY\Policy\PolAdtEv`(REG_NONE) — 監査ポリシーのバイナリ。カテゴリ/サブカテゴリ毎に 監査なし/成功/失敗/両方 を解く。死活前(dead disk)で `auditpol /get` の代わりに「何が記録される設定だったか」を読む |
 
 (reg_userassist / reg_amcache / reg_shimcache / reg_mounteddevices も順次追加予定)
 
@@ -25,7 +26,7 @@ Windows レジストリ解析の**2層目**のツール置き場。
 C ツールは `make`、Python ツールはそのまま実行する。
 
 ```sh
-make                 # C ツール全部(現状 reg_ptcache)
+make                 # C ツール全部(reg_ptcache / reg_poladtev)
 make reg_ptcache     # 個別
 ./pt_timeline ...    # Python スクリプト(shebang 付き・ビルド不要)
 ```
@@ -59,3 +60,27 @@ evtx_decode -t -e 1006 Microsoft-Windows-Partition%4Diagnostic.evtx > evtx1006.t
 
 詳細は本書『デジタル・フォレンジックの原理』第6部「実行と操作の痕跡」
 (外部記憶媒体の接続履歴調査)を参照。
+
+## reg_poladtev の使い方
+
+`regf_decode` で `SECURITY` ハイブの PolAdtEv 値をフル hex で出し、パイプで渡す。
+
+```sh
+regf_decode -f -p "/ROOT/Policy/PolAdtEv" SECURITY | reg_poladtev        # 日本語名
+regf_decode -d "*PolAdtEv/(default)"      SECURITY | reg_poladtev --en    # 英語名(auditpol と同じ語彙)
+regf_decode -f -p "/ROOT/Policy/PolAdtEv" SECURITY | reg_poladtev --csv   # CSV
+```
+
+`--en` は `auditpol /get /category:*` と同じ英語サブカテゴリ名で出力する
+(ただし **PolAdtEv のバイト順**で並ぶ。auditpol の表示順とは異なる)。入力は
+`regf_decode` のパイプ(`…|REG_NONE|…`) / regedit の `.reg`(`"…"=hex:`) /
+生の hex 列に対応。値が `…[NN bytes]` と切り詰められている場合は検出して
+エラーにするので、`regf_decode` には `-f` か `-d` を付けてフル値を渡すこと。
+
+> 構造はフォーマット仕様書ではなく、実ハイブのバイト列から起こし、
+> kazamiya 氏「PolAdtEv_Structure」(rev5) と `auditpol /list /category /v`・
+> `auditpol /get /category:*` の実出力で裏取りした。ヘッダ/フッタの未確定
+> バイトは意味を付けず unknown のまま表示する(Fact is Fact)。
+
+詳細は本書『デジタル・フォレンジックの原理』第5部「Windows イベントログ」
+(監査ポリシー — 何が記録されるか)を参照。
