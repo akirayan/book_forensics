@@ -14,6 +14,10 @@
  *                           "Access Rights" (24H2+). --en flag.
  *  version 0.3  2026-11-24  Print usage and exit when stdin is a terminal or
  *                           empty, instead of blocking on an interactive read.
+ *  version 0.4  2026-11-25  --en now also localizes CSV. CSV has a single
+ *                           Subcategory column (and Category/Setting) that
+ *                           follow --en; default Japanese, --en English
+ *                           (matching auditpol). RawHex keeps the raw 0..3.
  *  (c) Akira Endo (yan.akira@gmail.com)
  *
  *
@@ -38,8 +42,10 @@
  *   # still prints the entire hive tree. -f -p is cleaner for a single value.
  *
  *   Options:
- *     -e | --en     show English subcategory names (match `auditpol /get`)
- *     -c | --csv    CSV (Category,CategoryGUID,ByteIndex,NameEN,NameJP,Setting,Raw)
+ *     -e | --en     English output (names + settings match `auditpol /get`);
+ *                   applies to the human view and to CSV.
+ *     -c | --csv    CSV: Category,CategoryGUID,ByteIndex,Subcategory,Setting,RawHex
+ *                   text columns follow --en (default Japanese); RawHex = 0..3
  *     -h | --help
  *
  * Expected Input (auto-detected):
@@ -225,13 +231,6 @@ static const char *setting_en(unsigned v)
                  case 2: return "Failure";     case 3: return "Success and Failure";
                  default: return "Unknown"; }
 }
-static const char *setting_csv(unsigned v)
-{
-    switch (v) { case 0: return "None"; case 1: return "Success";
-                 case 2: return "Failure"; case 3: return "SuccessAndFailure";
-                 default: return "Unknown"; }
-}
-
 /* ------------------------------------------------------------------ */
 
 static char *slurp_stdin(size_t *out_len)
@@ -375,7 +374,7 @@ int main(int argc, char **argv)
             "words; decoding by on-disk counts.\n", prog, sum, settings_words);
 
     if (g_csv) {
-        printf("Category,CategoryGUID,ByteIndex,NameEN,NameJP,Setting,RawHex\n");
+        printf("Category,CategoryGUID,ByteIndex,Subcategory,Setting,RawHex\n");
     } else {
         printf("PolAdtEv  (HKLM\\SECURITY\\Policy\\PolAdtEv)\n");
         printf("  header : ver=0x%04X  categories=%u  count-offset=0x%X\n",
@@ -403,8 +402,10 @@ int main(int argc, char **argv)
             const char *njp = known ? SUBS[ci][j].jp : "(不明: このビルドで追加)";
             const char *nen = known ? SUBS[ci][j].en : "UNKNOWN";
             if (g_csv)
-                printf("%s,%s,%u,%s,%s,%s,%04X\n",
-                       cen, cg, j, nen, njp, setting_csv(low), val);
+                printf("%s,%s,%u,%s,%s,%04X\n",
+                       g_en ? cen : cjp, cg, j,
+                       g_en ? nen : njp,
+                       g_en ? setting_en(low) : setting_jp(low), val);
             else if (g_en)
                 printf("    [%2u] %-42s %s\n", j, nen, setting_en(low));
             else

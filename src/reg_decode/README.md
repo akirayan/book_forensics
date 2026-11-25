@@ -67,15 +67,18 @@ evtx_decode -t -e 1006 Microsoft-Windows-Partition%4Diagnostic.evtx > evtx1006.t
 単一の値なので `-f -p`(その値だけを 2 行で出す)を使うのが素直。
 
 ```sh
-regf_decode -f -p "/ROOT/Policy/PolAdtEv" SECURITY | reg_poladtev        # 日本語名
-regf_decode -f -p "/ROOT/Policy/PolAdtEv" SECURITY | reg_poladtev --en   # 英語名(auditpol と同じ語彙)
-regf_decode -f -p "/ROOT/Policy/PolAdtEv" SECURITY | reg_poladtev --csv  # CSV
+regf_decode -f -p "/ROOT/Policy/PolAdtEv" SECURITY | reg_poladtev             # 日本語
+regf_decode -f -p "/ROOT/Policy/PolAdtEv" SECURITY | reg_poladtev --en        # 英語(auditpol と同じ語彙)
+regf_decode -f -p "/ROOT/Policy/PolAdtEv" SECURITY | reg_poladtev --csv       # CSV(日本語)
+regf_decode -f -p "/ROOT/Policy/PolAdtEv" SECURITY | reg_poladtev --csv --en  # CSV(英語)
 ```
 
-`--en` は `auditpol /get /category:*` と同じ英語サブカテゴリ名で出力する
-(ただし **PolAdtEv のバイト順**で並ぶ。auditpol の表示順とは異なる)。入力は
-`regf_decode` のパイプ(`…|REG_NONE|…`) / regedit の `.reg`(`"…"=hex:`) /
-生の hex 列に対応。
+`--en` は `auditpol /get /category:*` と同じ英語の語彙(カテゴリ名・サブカテゴリ名・
+Success/Failure)で出力する(ただし **PolAdtEv のバイト順**で並ぶ。auditpol の表示順
+とは異なる)。`--en` は人間向け表示にも CSV にも効く。CSV の列は
+`Category,CategoryGUID,ByteIndex,Subcategory,Setting,RawHex` で、文字列の列は `--en`
+に従い(既定は日本語)、`RawHex` は生の値(0〜3)。入力は `regf_decode` のパイプ
+(`…|REG_NONE|…`) / regedit の `.reg`(`"…"=hex:`) / 生の hex 列に対応。
 
 > `regf_decode -d "*PolAdtEv/(default)"` でも渡せる(`reg_poladtev` は `hex:`
 > ブロックを拾うので結果は同じ)。ただし `-d` は「どの値をフル hex で**ダンプ**
