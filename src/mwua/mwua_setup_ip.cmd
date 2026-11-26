@@ -5,12 +5,12 @@
 ::
 :: Usage (run as Administrator):
 ::    mwua_setup_ip.cmd HOSTNAME IPADDRESS GATEWAY
-::    eg. mwua_setup_ip.cmd WIN11JA111 172.16.28.131 172.16.28.2
+::    eg. mwua_setup_ip.cmd WIN11JA114 172.16.28.114 172.16.28.2
 
 :: 1. Arguments
 if "%~3"=="" (
     echo [USAGE] %0 HOSTNAME IPADDRESS GATEWAY
-    echo     eg. %0 WIN11JA111 172.16.28.131 172.16.28.2
+    echo     eg. %0 WIN11JA114 172.16.28.114 172.16.28.2
     exit /b 1
 )
 set "NEW_HOSTNAME=%~1"
