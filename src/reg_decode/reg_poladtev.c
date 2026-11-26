@@ -18,6 +18,16 @@
  *                           Subcategory column (and Category/Setting) that
  *                           follow --en; default Japanese, --en English
  *                           (matching auditpol). RawHex keeps the raw 0..3.
+ *  version 0.5  2026-11-26  --csv now reproduces the `auditpol /backup` column
+ *                           layout: Machine Name,Policy Target,Subcategory,
+ *                           Subcategory GUID,Inclusion Setting,Exclusion
+ *                           Setting,Setting Value. Machine Name is left blank
+ *                           (a dead hive carries no host name); Policy Target
+ *                           is System; Inclusion Setting uses auditpol's
+ *                           English tokens; Setting Value is the raw 0..3.
+ *                           Added the per-subcategory GUIDs ({0CCE92xx-...}).
+ *  version 0.6  2026-11-26  Default output is now English; --ja switches to
+ *                           Japanese. (--en still accepted, now the default.)
  *  (c) Akira Endo (yan.akira@gmail.com)
  *
  *
@@ -35,17 +45,23 @@
  *
  * Usage (prefer -f -p: it emits just this value, two lines):
  *   regf_decode -f -p "/ROOT/Policy/PolAdtEv" SECURITY | reg_poladtev
- *   reg_poladtev --en  < poladtev.hex     (English subcategory names)
+ *   reg_poladtev --ja  < poladtev.hex     (Japanese subcategory names)
  *   reg_poladtev --csv < poladtev.hex
  *   # regf_decode -d "*PolAdtEv/(default)" also feeds this tool, but -d only
  *   # selects which value to DUMP in full hex -- it is NOT a filter, so it
  *   # still prints the entire hive tree. -f -p is cleaner for a single value.
  *
  *   Options:
- *     -e | --en     English output (names + settings match `auditpol /get`);
- *                   applies to the human view and to CSV.
- *     -c | --csv    CSV: Category,CategoryGUID,ByteIndex,Subcategory,Setting,RawHex
- *                   text columns follow --en (default Japanese); RawHex = 0..3
+ *     (default)     English output (names + settings match `auditpol /get`).
+ *     -j | --ja     Japanese output. Applies to the human view and to the CSV
+ *                   Subcategory column (the CSV Inclusion Setting is always
+ *                   English, as auditpol /backup writes it).
+ *     -e | --en     English output (the default; accepted for explicitness).
+ *     -c | --csv    CSV in `auditpol /backup` layout:
+ *                     Machine Name,Policy Target,Subcategory,Subcategory GUID,
+ *                     Inclusion Setting,Exclusion Setting,Setting Value
+ *                   Machine Name is blank (a dead hive has no host name);
+ *                   Setting Value is the raw 0..3.
  *     -h | --help
  *
  * Expected Input (auto-detected):
@@ -214,10 +230,33 @@ static const SubName *SUBS[9] = {
 };
 static const int SUBS_N[9] = { 5, 12, 14, 3, 6, 6, 6, 4, 4 };  /* Win11 24H2 */
 
+/* Per-subcategory GUIDs ({0CCE92xx-69AE-11D9-BED3-505054503030}), in the same */
+/* PolAdtEv byte order as the SUB_* tables above. Matches auditpol's           */
+/* "Subcategory GUID" column (auditpol /list /subcategory /v).                  */
+#define AP(h) "{0CCE92" h "-69AE-11D9-BED3-505054503030}"
+static const char *GUID_SYSTEM[]   = { AP("10"), AP("11"), AP("12"), AP("13"), AP("14") };
+static const char *GUID_LOGON[]    = { AP("15"), AP("16"), AP("17"), AP("18"), AP("1B"),
+                                       AP("19"), AP("1A"), AP("1C"), AP("43"), AP("47"),
+                                       AP("49"), AP("4B") };
+static const char *GUID_OBJECT[]   = { AP("1D"), AP("1E"), AP("1F"), AP("20"), AP("27"),
+                                       AP("21"), AP("22"), AP("23"), AP("24"), AP("25"),
+                                       AP("26"), AP("44"), AP("45"), AP("46") };
+static const char *GUID_PRIV[]     = { AP("28"), AP("29"), AP("2A") };
+static const char *GUID_DETAIL[]   = { AP("2B"), AP("2C"), AP("2D"), AP("2E"), AP("48"), AP("4A") };
+static const char *GUID_POLICY[]   = { AP("2F"), AP("30"), AP("31"), AP("32"), AP("33"), AP("34") };
+static const char *GUID_ACCTMGMT[] = { AP("35"), AP("36"), AP("37"), AP("38"), AP("39"), AP("3A") };
+static const char *GUID_DSACCESS[] = { AP("3B"), AP("3C"), AP("3D"), AP("3E") };
+static const char *GUID_ACCTLOGON[]= { AP("3F"), AP("40"), AP("41"), AP("42") };
+#undef AP
+static const char *const *SUB_GUID[9] = {
+    GUID_SYSTEM, GUID_LOGON, GUID_OBJECT, GUID_PRIV, GUID_DETAIL,
+    GUID_POLICY, GUID_ACCTMGMT, GUID_DSACCESS, GUID_ACCTLOGON,
+};
+
 /* ------------------------------------------------------------------ */
 
 static int g_csv = 0;
-static int g_en  = 0;
+static int g_en  = 1;   /* default English; --ja switches to Japanese */
 
 static const char *setting_jp(unsigned v)
 {
@@ -282,7 +321,7 @@ static size_t collect_hex(const char *p, uint8_t *out, size_t outcap,
 static void usage(const char *prog)
 {
     fprintf(stderr,
-        "Usage: %s [--en] [--csv]\n"
+        "Usage: %s [--ja] [--csv]   (default output is English; --ja = Japanese)\n"
         "  Decode HKLM\\SECURITY\\Policy\\PolAdtEv (audit policy blob).\n"
         "    regf_decode -f -p \"/ROOT/Policy/PolAdtEv\" SECURITY | %s\n"
         "  (-d \"*PolAdtEv/(default)\" also works but prints the whole tree.)\n",
@@ -294,6 +333,7 @@ int main(int argc, char **argv)
     const char *prog = "reg_poladtev";
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-c") || !strcmp(argv[i], "--csv")) g_csv = 1;
+        else if (!strcmp(argv[i], "-j") || !strcmp(argv[i], "--ja")) g_en = 0;
         else if (!strcmp(argv[i], "-e") || !strcmp(argv[i], "--en")) g_en = 1;
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) { usage(prog); return 0; }
         else { fprintf(stderr, "%s: unknown option: %s\n", prog, argv[i]); usage(prog); return 2; }
@@ -374,15 +414,20 @@ int main(int argc, char **argv)
             "words; decoding by on-disk counts.\n", prog, sum, settings_words);
 
     if (g_csv) {
-        printf("Category,CategoryGUID,ByteIndex,Subcategory,Setting,RawHex\n");
+        printf("Machine Name,Policy Target,Subcategory,Subcategory GUID,"
+               "Inclusion Setting,Exclusion Setting,Setting Value\n");
     } else {
         printf("PolAdtEv  (HKLM\\SECURITY\\Policy\\PolAdtEv)\n");
         printf("  header : ver=0x%04X  categories=%u  count-offset=0x%X\n",
                w_ver, nCat, cntOff);
         printf("  unknown: hdr[0x02]=0x%04X hdr[0x06]=0x%04X hdr[0x0A]=0x%04X"
-               "  footer[0x%X]=0x%04X  (kazamiya rev5 でも未確定)\n",
-               w_unk1, w_unk2, w_unk3, cntOff - 2, foot_unk);
-        printf("  note   : 表示はPolAdtEvのバイト順。auditpol /get の表示順とは異なる\n");
+               "  footer[0x%X]=0x%04X  %s\n",
+               w_unk1, w_unk2, w_unk3, cntOff - 2, foot_unk,
+               g_en ? "(still unconfirmed, even in kazamiya rev5)"
+                    : "(kazamiya rev5 でも未確定)");
+        printf("  note   : %s\n",
+               g_en ? "order is PolAdtEv byte order, not the `auditpol /get` display order"
+                    : "表示はPolAdtEvのバイト順。auditpol /get の表示順とは異なる");
     }
 
     size_t widx = 0;
@@ -401,11 +446,15 @@ int main(int argc, char **argv)
             int known = (ci < 9 && (int)j < SUBS_N[ci]);
             const char *njp = known ? SUBS[ci][j].jp : "(不明: このビルドで追加)";
             const char *nen = known ? SUBS[ci][j].en : "UNKNOWN";
-            if (g_csv)
-                printf("%s,%s,%u,%s,%s,%04X\n",
-                       g_en ? cen : cjp, cg, j,
-                       g_en ? nen : njp,
-                       g_en ? setting_en(low) : setting_jp(low), val);
+            if (g_csv) {
+                /* auditpol /backup layout: Machine Name blank (dead hive has
+                   no host name), Policy Target=System, Inclusion Setting in
+                   auditpol's English tokens, Exclusion Setting blank,
+                   Setting Value = raw 0..3. Subcategory follows --en. */
+                const char *sg = known ? SUB_GUID[ci][j] : "";
+                printf(",System,%s,%s,%s,,%u\n",
+                       g_en ? nen : njp, sg, setting_en(low), low);
+            }
             else if (g_en)
                 printf("    [%2u] %-42s %s\n", j, nen, setting_en(low));
             else
