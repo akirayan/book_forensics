@@ -12,21 +12,39 @@
 
 ## ファイル
 
-| ファイル                   | 内容                                                      |
-|----------------------------|-----------------------------------------------------------|
-| `Security_rdp_normal.evtx` | Windows（`mstsc`）と macOS からの RDP（clean、198 件） |
-| `Security_rdp_linux.evtx`  | Kali Linux の `xfreerdp` からの RDP（clean、80 件） |
+| ファイル                     | 内容                                                      |
+|------------------------------|-----------------------------------------------------------|
+| `Security_rdp_normal.evtx`   | Windows（`mstsc`）と macOS からの RDP（clean、198 件） |
+| `Security_rdp_linux.evtx`    | Kali Linux の `xfreerdp` からの RDP（clean、80 件） |
+| `Security_rdp_takeover.evtx` | コンソール→ロック/解除→RDP 乗っ取り→コンソール取り戻し（clean、156 件） |
 
 ## 完全性の検証
 
-| 対象                       | SHA-256 |
-|----------------------------|---------|
-| `Security_rdp_normal.evtx` | `f24601b77ee66a06006170162ff6f2034908c7f6eed0cc9060252132c1953756` |
-| `Security_rdp_linux.evtx`  | `9d4936755c6f120ffe4f54f749a477a83fbc6ba4a3b4583fcd154006ec4b5398` |
+| 対象                         | SHA-256 |
+|------------------------------|---------|
+| `Security_rdp_normal.evtx`   | `f24601b77ee66a06006170162ff6f2034908c7f6eed0cc9060252132c1953756` |
+| `Security_rdp_linux.evtx`    | `9d4936755c6f120ffe4f54f749a477a83fbc6ba4a3b4583fcd154006ec4b5398` |
+| `Security_rdp_takeover.evtx` | `c8b969440ed93f79abc84232141ad377b330b813a988e454ad88c839e1a4d966` |
 
 ```bash
-shasum -a 256 Security_rdp_normal.evtx Security_rdp_linux.evtx
+shasum -a 256 Security_rdp_normal.evtx Security_rdp_linux.evtx Security_rdp_takeover.evtx
 ```
+
+### `Security_rdp_takeover.evtx` の読みどころ（通説の訂正）
+
+「ロック解除や既存セッションへの RDP 再接続は `Type=7`（Unlock）になる」という通説を実データで検証したもの。現在の Windows 11 では**そうならなかった**。
+
+| 時刻(UTC) | 操作 | 記録された 4624 |
+|---|---|---|
+| 04:20:53 | コンソールログイン | **Type=2** ×2 |
+| 04:30:18 | ロック→**アンロック** | **Type=2** ×2（Type=7 ではない） |
+| 04:33:38 | `kali081` から RDP で乗っ取り | **Type=3 ＋ Type=10 ×2**（通常の RDP と同じ） |
+| 04:35:25 | コンソールへ取り戻し | **Type=2** ×2 |
+
+- **Type=7 は 1 件も出ない**（Logon 監査は有効なのにアンロックが Type=2 になる、という挙動）。
+- `4778`/`4779`（再接続/切断）・`4800`/`4801`（ロック/解除）も出ていないが、これは監査サブカテゴリ **「その他のログオン/ログオフ イベント（Other Logon/Logoff Events）」が未有効**だったため（存在しないのではない）。`auditpol /set /subcategory:"Other Logon/Logoff Events" /success:enable /failure:enable` を入れれば記録される。
+- 「乗っ取り」は特別なイベント ID ではなく、**ログオフを挟まず Type=2 と Type=3/10 が交互に積み上がる時系列**（＋デスクトップの継続）として現れる。
+- 教訓：痕跡が「無い」と結論する前に、そのイベントが監査対象だったか（`auditpol /get /category:*`）を確かめる。
 
 ## 読みどころ（この章の核心）
 
